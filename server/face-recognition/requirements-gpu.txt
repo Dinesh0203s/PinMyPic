@@ -1,0 +1,26 @@
+# GPU-accelerated requirements for face recognition service
+# Use this file when deploying to GPU-enabled environments
+
+# Core dependencies (same as base requirements)
+faiss-gpu>=1.11.0  # GPU-accelerated similarity search
+flask>=3.1.1
+insightface>=0.7.3
+numpy>=2.3.1
+opencv-python>=4.11.0.86
+requests>=2.32.4
+
+# GPU-accelerated ONNX Runtime
+onnxruntime-gpu>=1.22.0  # CUDA-enabled ONNX Runtime
+
+# Optional GPU libraries for enhanced performance
+torch>=2.0.0  # PyTorch with CUDA support for GPU detection and memory management
+torchvision>=0.15.0  # Computer vision utilities
+
+# TensorRT for NVIDIA GPU optimization (optional)
+# tensorrt>=8.6.0  # Uncomment if TensorRT is available
+
+# AMD GPU support (optional)
+# onnxruntime-directml>=1.22.0  # Uncomment for AMD GPU or Intel integrated graphics
+
+# Performance monitoring
+psutil>=5.9.0  # System resource monitoring

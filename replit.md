@@ -1,6 +1,23 @@
 # PinMyPic - Photography Portfolio & Booking Platform
 
 ## Recent Changes
+- Implemented comprehensive website performance optimizations (August 8, 2025)
+  - Enhanced React Query configuration with intelligent retry logic, exponential backoff, and network-aware settings
+  - Added advanced caching system with LRU eviction, TTL management, and smart cache invalidation
+  - Implemented Service Worker for offline functionality, static asset caching, and background sync
+  - Created performance monitoring system with real-time metrics, memory management, and connection-aware loading
+  - Added intelligent image optimization with lazy loading, format detection, and progressive enhancement
+  - Implemented network request optimization with batching, deduplication, and priority queuing
+  - Added performance tracking utilities with timing measurements and automatic cleanup
+  - Created development-only performance monitor (Ctrl+Shift+P to toggle) for optimization insights
+- Fixed page navigation scroll behavior (August 8, 2025)
+  - Added global ScrollToTop component in App.tsx to ensure all page navigations start from the top
+  - Enhanced ProtectedRoute component with scroll-to-top functionality for sign-in screens
+  - Resolved issue where logged-out users navigating to booking page would load from bottom of screen
+- Updated face recognition dialog UI styling (August 8, 2025)
+  - Removed cross mark (X) from all dialog components for cleaner interface
+  - Changed cancel button to white background with red text and hover effects
+  - Added border and drop shadow to cancel button for better visual definition
 - Enhanced save photos authentication flow with improved UX (August 8, 2025)
   - Save button now visible to all users (authenticated and unauthenticated)
   - Clicking save without authentication shows toast notification with sign-in prompt

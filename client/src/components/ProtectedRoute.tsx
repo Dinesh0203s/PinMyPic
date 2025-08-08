@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { LogIn, User } from 'lucide-react';
 import Header from './Header';
 import Footer from './Footer';
+import { useEffect } from 'react';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -17,6 +18,11 @@ interface ProtectedRouteProps {
 const ProtectedRoute = ({ children, requireAdmin = false, showSignInMessage = true }: ProtectedRouteProps) => {
   const { currentUser, userData, loading, loginWithGoogle } = useAuth();
   const location = useLocation();
+
+  // Scroll to top when component mounts or location changes
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   // Don't show loading if we have a current user
   if (loading && !currentUser) {

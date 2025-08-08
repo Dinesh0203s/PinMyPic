@@ -1272,14 +1272,13 @@ const Events = () => {
             )}
             <div className="flex gap-2">
               <Button 
-                variant="outline" 
                 onClick={() => {
                   setFaceScanDialogOpen(false);
                   stopCamera();
                   setCapturedPhoto(null);
                   setUploadedFace(null);
                 }} 
-                className="flex-1"
+                className="flex-1 hover:bg-red-600 hover:text-white bg-[#ffffff] text-[#ff0000] border border-red-300 shadow-md"
               >
                 Cancel
               </Button>

@@ -16,9 +16,9 @@ import QRCode from 'qrcode';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Process faces for a photo (deprecated - now uses queue)
-async function processPhotoFaces(photoId: string, photoPath: string) {
+async function processPhotoFaces(photoId: string, photoPath: string, userId: string = 'anonymous') {
   // Add to queue instead of processing immediately
-  await faceProcessingQueue.addToQueue(photoId, photoPath);
+  await faceProcessingQueue.addToQueue(photoId, photoPath, userId);
 }
 
 // Process faces synchronously for immediate face data extraction
@@ -115,12 +115,19 @@ async function processFacePhotoWithTimeout(photoPath: string, timeoutMs: number)
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Start the face recognition service
-  startFaceRecognitionService()?.then(() => {
-    console.log('Face recognition service started');
-  }).catch((err: any) => {
-    console.error('Failed to start face recognition service:', err);
-  });
+  // Start the face recognition service with proper error handling
+  try {
+    const servicePromise = startFaceRecognitionService();
+    if (servicePromise) {
+      servicePromise.then(() => {
+        console.log('Face recognition service started');
+      }).catch((err: any) => {
+        console.error('Failed to start face recognition service:', err);
+      });
+    }
+  } catch (err) {
+    console.error('Error starting face recognition service:', err);
+  }
   // Auth routes
   app.post("/api/auth/sync-user", async (req, res) => {
     try {
@@ -645,28 +652,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fs.writeFileSync(localFilePath, multerFile.buffer);
         localFilesToCleanup.push(localFilePath);
         
-        // STEP 2: Process face recognition on local file
+        // STEP 2: Skip immediate face processing - will be handled by queue after upload
         let faceData = null;
         let facesFound = 0;
-        try {
-          // Process faces synchronously to get face data before MongoDB upload
-          faceData = await processFacesSynchronously(localFilePath);
-          facesFound = faceData ? faceData.length : 0;
-          console.log(`🔍 Face recognition completed - File: ${originalFilename} | Faces found: ${facesFound}`);
-        } catch (faceError) {
-          console.error(`Face processing failed for ${originalFilename}:`, faceError);
-          // Continue with upload even if face processing fails
-        }
+        // Face recognition will be processed asynchronously via the queue system after photo is uploaded
 
         // STEP 3: Upload to MongoDB GridFS after face processing
-        let fileId;
+        let fileId, thumbnailId;
         try {
           const { mongoStorage } = await import('./mongo-storage');
+          
+          // Upload original image
           fileId = await mongoStorage.uploadImageToGridFS(
             multerFile.buffer, 
             filename,
             multerFile.mimetype
           );
+
+          // STEP 3.5: Generate and upload WebP thumbnail with correct orientation
+          try {
+            const sharp = await import('sharp');
+            
+            // Process the image buffer with Sharp
+            let processedImage = sharp.default(multerFile.buffer);
+            
+            // Get metadata for orientation correction
+            let originalMetadata;
+            try {
+              originalMetadata = await processedImage.metadata();
+            } catch (metaError: any) {
+              console.log('Could not read thumbnail metadata:', metaError?.message);
+            }
+            
+            // Apply EXIF orientation correction
+            if (originalMetadata?.orientation && originalMetadata.orientation !== 1) {
+              console.log(`Applying thumbnail orientation correction: ${originalMetadata.orientation}`);
+              
+              switch (originalMetadata.orientation) {
+                case 2:
+                  processedImage = processedImage.flop();
+                  break;
+                case 3:
+                  processedImage = processedImage.rotate(180);
+                  break;
+                case 4:
+                  processedImage = processedImage.flip();
+                  break;
+                case 5:
+                  processedImage = processedImage.rotate(90).flop();
+                  break;
+                case 6:
+                  processedImage = processedImage.rotate(90);
+                  break;
+                case 7:
+                  processedImage = processedImage.rotate(270).flop();
+                  break;
+                case 8:
+                  processedImage = processedImage.rotate(270);
+                  break;
+              }
+            }
+            
+            // Create optimized WebP thumbnail (300px max, quality 80)
+            const thumbnailBuffer = await processedImage
+              .resize(300, 300, {
+                fit: 'inside',
+                withoutEnlargement: true
+              })
+              .webp({ quality: 80, effort: 4 })
+              .toBuffer();
+            
+            // Upload thumbnail to GridFS
+            thumbnailId = await mongoStorage.uploadThumbnailToGridFS(
+              thumbnailBuffer,
+              filename,
+              fileId
+            );
+            
+            console.log(`📸 Generated WebP thumbnail for ${originalFilename} (${thumbnailBuffer.length} bytes)`);
+          } catch (thumbnailError: any) {
+            console.error(`Thumbnail generation failed for ${originalFilename}:`, thumbnailError);
+            // Continue without thumbnail - will fall back to on-the-fly processing
+          }
         } catch (mongoError: any) {
           console.error(`MongoDB GridFS upload failed for ${originalFilename}:`, mongoError);
           throw new Error(`Photo upload failed: ${mongoError.message}`);
@@ -677,14 +744,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eventId,
           filename: filename,
           url: `/api/images/${fileId}`,
-          thumbnailUrl: `/api/images/${fileId}`,
+          thumbnailUrl: thumbnailId ? `/api/images/${thumbnailId}` : `/api/images/${fileId}`,
+          thumbnailId: thumbnailId, // Store thumbnail ID separately
           tags: '',
           isProcessed: faceData ? true : false,
-          faceData: faceData // Store face recognition results
+          faceData: faceData || undefined // Store face recognition results, use undefined instead of null
         };
 
         const photo = await storage.createPhoto(photoData);
         uploadedPhotos.push(photo);
+
+        // STEP 4: Add to enhanced face processing queue for background processing
+        try {
+          const { faceProcessingQueue } = await import('./face-processing-queue');
+          const userId = req.user?.userData?.id || req.user?.firebaseUid || 'anonymous';
+          
+          const queueResult = await faceProcessingQueue.addToQueue(
+            photo.id, 
+            localFilePath, 
+            userId,
+            'normal' // Priority: normal for regular uploads
+          );
+          
+          if (!queueResult.success) {
+            console.warn(`Queue warning for photo ${photo.id}: ${queueResult.message}`);
+          } else {
+            console.log(`Added photo ${photo.id} to face processing queue - Position: ${queueResult.queuePosition}`);
+          }
+        } catch (queueError) {
+          console.error(`Failed to add photo ${photo.id} to face processing queue:`, queueError);
+          // Continue without face processing - photo is still uploaded and accessible
+        }
         }
         
         // Add a small delay between batches to prevent service overload
@@ -694,17 +784,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // STEP 4: Clean up local files after successful MongoDB upload
-      for (const localFile of localFilesToCleanup) {
-        try {
-          if (fs.existsSync(localFile)) {
-            fs.unlinkSync(localFile);
-          }
-        } catch (cleanupError) {
-          console.error('Failed to cleanup local file:', localFile, cleanupError);
-          // Don't fail the request if cleanup fails
-        }
-      }
+      // STEP 5: Clean up local files after successful MongoDB upload and queue addition
+      // Note: Don't clean up immediately - queue processing needs these files
+      // The queue will handle cleanup after processing
+      
+      console.log(`Successfully uploaded ${uploadedPhotos.length} photos. Face processing queued for background processing.`);
       
       // Update event photo count
       const newPhotoCount = (event.photoCount || 0) + uploadedPhotos.length;
@@ -733,6 +817,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error uploading photo:", error);
       res.status(500).json({ error: "Failed to upload photo", details: error?.message || 'Unknown error' });
+    }
+  });
+
+  // Enhanced Queue Management API for 100+ users
+  app.get("/api/face-queue/status", async (req: any, res) => {
+    try {
+      const { faceProcessingQueue } = await import('./face-processing-queue');
+      const status = faceProcessingQueue.getStatus();
+      res.json(status);
+    } catch (error) {
+      console.error("Error getting queue status:", error);
+      res.status(500).json({ error: "Failed to get queue status" });
+    }
+  });
+
+  app.get("/api/face-queue/user-status", async (req: any, res) => {
+    try {
+      const { faceProcessingQueue } = await import('./face-processing-queue');
+      const userId = req.user?.userData?.id || req.user?.firebaseUid || 'anonymous';
+      const userStatus = faceProcessingQueue.getUserStatus(userId);
+      res.json(userStatus);
+    } catch (error) {
+      console.error("Error getting user queue status:", error);
+      res.status(500).json({ error: "Failed to get user queue status" });
+    }
+  });
+
+  app.post("/api/face-queue/settings", async (req: any, res) => {
+    try {
+      const { faceProcessingQueue } = await import('./face-processing-queue');
+      const { maxConcurrent, processingDelay, retryAttempts } = req.body;
+      
+      faceProcessingQueue.updateSettings({
+        maxConcurrent,
+        processingDelay,
+        retryAttempts
+      });
+      
+      res.json({ 
+        success: true, 
+        message: "Queue settings updated",
+        newSettings: faceProcessingQueue.getStatus()
+      });
+    } catch (error) {
+      console.error("Error updating queue settings:", error);
+      res.status(500).json({ error: "Failed to update queue settings" });
     }
   });
 

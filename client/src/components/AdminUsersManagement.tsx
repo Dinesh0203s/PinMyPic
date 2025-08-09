@@ -341,7 +341,7 @@ export function AdminUsersManagement({ currentUser }: AdminUsersManagementProps)
                                         <DialogHeader>
                                           <DialogTitle>Promote User</DialogTitle>
                                           <DialogDescription>
-                                            Select the admin role for {selectedUser?.email}
+                                            {selectedUser ? `Select the admin role for ${selectedUser.email}` : 'Select the admin role for the user'}
                                           </DialogDescription>
                                         </DialogHeader>
                                         <div className="space-y-4">

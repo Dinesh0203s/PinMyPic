@@ -39,13 +39,19 @@ export const VirtualizedGallery = ({
   });
 
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
+  const [errorImages, setErrorImages] = useState<Set<string>>(new Set());
 
   const handleImageLoad = (photoId: string) => {
     setLoadedImages(prev => new Set(prev).add(photoId));
   };
 
+  const handleImageError = (photoId: string) => {
+    setErrorImages(prev => new Set(prev).add(photoId));
+  };
+
   const renderPhoto = (photo: Photo, index: number) => {
     const isLoaded = loadedImages.has(photo.id);
+    const hasError = errorImages.has(photo.id);
     const isSaved = savedPhotoIds.includes(photo.id);
     const isSaving = savingPhotoIds.includes(photo.id);
 
@@ -63,12 +69,19 @@ export const VirtualizedGallery = ({
               isLoaded ? 'opacity-100' : 'opacity-0'
             }`}
             onLoad={() => handleImageLoad(photo.id)}
+            onError={() => handleImageError(photo.id)}
             loading="lazy"
           />
           
-          {!isLoaded && (
+          {!isLoaded && !hasError && (
             <div className="absolute inset-0 bg-gray-200 animate-pulse flex items-center justify-center">
               <div className="w-8 h-8 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
+          
+          {hasError && (
+            <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
+              <div className="text-gray-400 text-sm">Image unavailable</div>
             </div>
           )}
 

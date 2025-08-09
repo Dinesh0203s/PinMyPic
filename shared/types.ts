@@ -65,6 +65,7 @@ export interface Photo {
   filename: string;
   url: string;
   thumbnailUrl?: string;
+  thumbnailId?: string; // GridFS ID for pre-generated WebP thumbnail
   tags?: string;
   isProcessed: boolean;
   processingError?: string;

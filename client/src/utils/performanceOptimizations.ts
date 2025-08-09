@@ -1,211 +1,197 @@
-// Comprehensive performance optimizations
+// Comprehensive performance optimizations initialization
+import { performanceManager } from './performance';
+import { imageOptimizer } from './imageOptimization';
 
-import { networkManager } from './networkOptimization';
-import { apiCache } from './cacheOptimization';
-
-// Image loading optimization
-export class ImageOptimizer {
-  private static instance: ImageOptimizer;
-  private loadingImages: Map<string, Promise<HTMLImageElement>> = new Map();
-  private intersectionObserver?: IntersectionObserver;
-
-  static getInstance(): ImageOptimizer {
-    if (!ImageOptimizer.instance) {
-      ImageOptimizer.instance = new ImageOptimizer();
-    }
-    return ImageOptimizer.instance;
-  }
-
-  constructor() {
-    this.setupIntersectionObserver();
-  }
-
-  private setupIntersectionObserver(): void {
-    if (typeof IntersectionObserver !== 'undefined') {
-      this.intersectionObserver = new IntersectionObserver(
-        (entries) => {
-          entries.forEach(entry => {
-            if (entry.isIntersecting) {
-              const img = entry.target as HTMLImageElement;
-              const src = img.dataset.src;
-              if (src) {
-                this.loadImage(src).then(loadedImg => {
-                  img.src = loadedImg.src;
-                  img.classList.add('loaded');
-                });
-                this.intersectionObserver?.unobserve(img);
+// Register service worker for production caching
+const registerServiceWorker = async () => {
+  if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+    try {
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      console.log('Service Worker registered:', registration);
+      
+      // Handle service worker updates
+      registration.addEventListener('updatefound', () => {
+        const newWorker = registration.installing;
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              // New content available, prompt user to update
+              if (confirm('A new version of the app is available. Would you like to update?')) {
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
+                window.location.reload();
               }
             }
           });
-        },
-        {
-          rootMargin: '50px 0px',
-          threshold: 0.01,
         }
-      );
-    }
-  }
-
-  async loadImage(src: string): Promise<HTMLImageElement> {
-    if (this.loadingImages.has(src)) {
-      return this.loadingImages.get(src)!;
-    }
-
-    const promise = new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.decoding = 'async';
-      img.src = src;
-    });
-
-    this.loadingImages.set(src, promise);
-    
-    try {
-      const img = await promise;
-      this.loadingImages.delete(src);
-      return img;
+      });
     } catch (error) {
-      this.loadingImages.delete(src);
-      throw error;
+      console.error('Service Worker registration failed:', error);
     }
   }
+};
 
-  observeImage(img: HTMLImageElement): void {
-    if (this.intersectionObserver) {
-      this.intersectionObserver.observe(img);
-    }
-  }
-}
-
-// Memory management utilities
-export class MemoryManager {
-  private static cleanupInterval: NodeJS.Timeout;
-  private static memoryThreshold = 50 * 1024 * 1024; // 50MB
-
-  static startMonitoring(): void {
-    if (this.cleanupInterval) return;
-
-    this.cleanupInterval = setInterval(() => {
-      this.performCleanup();
-    }, 60000); // Every minute
-  }
-
-  static stopMonitoring(): void {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-    }
-  }
-
-  private static performCleanup(): void {
-    const memory = (performance as any).memory;
-    if (memory && memory.usedJSHeapSize > this.memoryThreshold) {
-      // Clear API cache partially
-      apiCache.cleanup();
-      
-      // Clear image cache if available
-      const imageOptimizer = ImageOptimizer.getInstance();
-      
-      // Force garbage collection in dev tools
-      if ((window as any).gc) {
-        (window as any).gc();
-      }
-
-      console.log('Memory cleanup performed');
-    }
-  }
-
-  static getMemoryInfo() {
-    const memory = (performance as any).memory;
-    return memory ? {
-      used: Math.round(memory.usedJSHeapSize / 1024 / 1024),
-      total: Math.round(memory.totalJSHeapSize / 1024 / 1024),
-      limit: Math.round(memory.jsHeapSizeLimit / 1024 / 1024),
-    } : null;
-  }
-}
-
-// Performance monitoring
-export class PerformanceTracker {
-  private static marks: Map<string, number> = new Map();
-
-  static mark(name: string): void {
-    this.marks.set(name, performance.now());
-  }
-
-  static measure(name: string, startMark: string): number | null {
-    const start = this.marks.get(startMark);
-    if (!start) return null;
-
-    const duration = performance.now() - start;
-    console.log(`Performance: ${name} took ${duration.toFixed(2)}ms`);
-    
-    // Clean up old marks
-    this.marks.delete(startMark);
-    
-    return duration;
-  }
-
-  static async measureAsync<T>(name: string, fn: () => Promise<T>): Promise<T> {
-    const start = performance.now();
-    try {
-      const result = await fn();
-      const duration = performance.now() - start;
-      console.log(`Async Performance: ${name} took ${duration.toFixed(2)}ms`);
-      return result;
-    } catch (error) {
-      const duration = performance.now() - start;
-      console.log(`Async Performance (Error): ${name} took ${duration.toFixed(2)}ms`);
-      throw error;
-    }
-  }
-}
-
-// Initialize optimizations
+// Initialize all performance optimizations
 export const initializePerformanceOptimizations = async () => {
-  // Start memory monitoring
-  MemoryManager.startMonitoring();
+  // Initialize performance manager
+  performanceManager.init();
   
-  // Initialize image optimizer
-  ImageOptimizer.getInstance();
-  
-  // Register service worker for caching
-  const { registerServiceWorker } = await import('./bundleOptimization');
+  // Register service worker
   await registerServiceWorker();
   
-  // Preload critical routes on interaction
-  const { preloadCriticalRoutes } = await import('./bundleOptimization');
-  preloadCriticalRoutes();
+  // Preload critical resources
+  preloadCriticalResources();
   
-  // Set up performance observers
-  if ('PerformanceObserver' in window) {
-    try {
-      const observer = new PerformanceObserver((list) => {
-        list.getEntries().forEach((entry) => {
-          if (entry.entryType === 'navigation') {
-            const nav = entry as PerformanceNavigationTiming;
-            console.log('Navigation timing:', {
-              DNS: nav.domainLookupEnd - nav.domainLookupStart,
-              TCP: nav.connectEnd - nav.connectStart,
-              Request: nav.responseStart - nav.requestStart,
-              Response: nav.responseEnd - nav.responseStart,
-              DOM: nav.domContentLoadedEventEnd - nav.domContentLoadedEventStart,
-              Load: nav.loadEventEnd - nav.loadEventStart,
-            });
-          }
-        });
-      });
-      
-      observer.observe({ entryTypes: ['navigation'] });
-    } catch (e) {
-      console.warn('Performance observer not fully supported');
-    }
-  }
+  // Setup performance monitoring
+  setupPerformanceMonitoring();
+  
+  // Setup connection-aware strategies
+  setupConnectionAwareStrategies();
   
   console.log('Performance optimizations initialized');
 };
 
-// Cleanup function
+// Preload critical resources based on current page
+const preloadCriticalResources = () => {
+  const currentPath = window.location.pathname;
+  
+  // Preload critical fonts
+  const fontLinks = [
+    { href: '/fonts/inter-var.woff2', type: 'font/woff2' },
+  ];
+  
+  fontLinks.forEach(font => {
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'font';
+    link.type = font.type;
+    link.href = font.href;
+    link.crossOrigin = 'anonymous';
+    document.head.appendChild(link);
+  });
+  
+  // Page-specific resource preloading
+  if (currentPath === '/events' || currentPath.includes('/events/')) {
+    // Preload event-related resources
+    imageOptimizer.preload([
+      '/api/images/placeholder-event.webp'
+    ], 'medium');
+  }
+  
+  if (currentPath === '/admin') {
+    // Preload admin dashboard resources
+    const adminResources = [
+      '/api/events/all',
+      '/api/bookings/all',
+      '/api/contacts/all'
+    ];
+    
+    // These will be handled by React Query, just ensure they're prioritized
+    adminResources.forEach(resource => {
+      const link = document.createElement('link');
+      link.rel = 'prefetch';
+      link.href = resource;
+      document.head.appendChild(link);
+    });
+  }
+};
+
+// Setup performance monitoring
+const setupPerformanceMonitoring = () => {
+  // Monitor Core Web Vitals
+  if ('web-vitals' in window) {
+    // This would require the web-vitals library
+    // For now, we'll use basic performance observers
+  }
+  
+  // Monitor Long Tasks
+  if ('PerformanceObserver' in window) {
+    try {
+      const longTaskObserver = new PerformanceObserver((list) => {
+        list.getEntries().forEach((entry) => {
+          if (entry.duration > 50) { // Tasks longer than 50ms
+            console.warn('Long task detected:', entry.duration.toFixed(2), 'ms');
+          }
+        });
+      });
+      
+      longTaskObserver.observe({ entryTypes: ['longtask'] });
+    } catch (error) {
+      // PerformanceObserver not supported
+    }
+  }
+  
+  // Monitor layout shifts
+  if ('PerformanceObserver' in window) {
+    try {
+      const clsObserver = new PerformanceObserver((list) => {
+        let clsValue = 0;
+        list.getEntries().forEach((entry: any) => {
+          if (!entry.hadRecentInput) {
+            clsValue += entry.value;
+          }
+        });
+        
+        if (clsValue > 0.1) { // CLS threshold
+          console.warn('Cumulative Layout Shift detected:', clsValue.toFixed(4));
+        }
+      });
+      
+      clsObserver.observe({ entryTypes: ['layout-shift'] });
+    } catch (error) {
+      // Layout shift observer not supported
+    }
+  }
+};
+
+// Setup connection-aware strategies
+const setupConnectionAwareStrategies = () => {
+  if ('connection' in navigator) {
+    const connection = (navigator as any).connection;
+    
+    const updateStrategy = () => {
+      const effectiveType = connection.effectiveType;
+      
+      // Adjust image quality based on connection
+      const qualityMap: Record<string, number> = {
+        'slow-2g': 40,
+        '2g': 50,
+        '3g': 70,
+        '4g': 85
+      };
+      
+      const quality = qualityMap[effectiveType] || 85;
+      document.documentElement.style.setProperty('--image-quality', quality.toString());
+      
+      // Adjust animation preferences
+      if (effectiveType === 'slow-2g' || effectiveType === '2g') {
+        document.documentElement.classList.add('reduce-motion');
+      } else {
+        document.documentElement.classList.remove('reduce-motion');
+      }
+    };
+    
+    connection.addEventListener('change', updateStrategy);
+    updateStrategy();
+  }
+  
+  // Handle online/offline states
+  const updateOnlineStatus = () => {
+    if (navigator.onLine) {
+      document.documentElement.classList.remove('offline');
+      document.documentElement.classList.add('online');
+    } else {
+      document.documentElement.classList.add('offline');
+      document.documentElement.classList.remove('online');
+    }
+  };
+  
+  window.addEventListener('online', updateOnlineStatus);
+  window.addEventListener('offline', updateOnlineStatus);
+  updateOnlineStatus();
+};
+
+// Cleanup function for when the app unmounts
 export const cleanupPerformanceOptimizations = () => {
-  MemoryManager.stopMonitoring();
+  performanceManager.cleanup();
+  imageOptimizer.cleanup();
 };

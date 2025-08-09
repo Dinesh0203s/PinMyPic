@@ -17,6 +17,17 @@ import multer from "multer";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { mongoService } from "./mongodb";
+
+// Global error handlers for production deployment
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit the process in production to maintain availability
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  // Don't exit immediately - log and continue for production stability
+});
 const app = express();
 
 // Initialize MongoDB connection
@@ -106,7 +117,49 @@ app.get('/api/images/:fileId', async (req, res) => {
     
     const imageData = await mongoStorage.getImageFromGridFS(fileId);
     if (!imageData) {
+      // Check if this is a placeholder or static file request
+      if (fileId.includes('placeholder') || fileId.includes('.webp') || fileId.includes('.jpg') || fileId.includes('.png')) {
+        // Try to serve from static assets
+        const path = await import('path');
+        const fs = await import('fs');
+        
+        const staticPaths = [
+          path.join(__dirname, '..', 'client', 'public', fileId),
+          path.join(__dirname, '..', 'client', 'public', 'placeholder.svg'),
+          path.join(__dirname, '..', 'public', fileId)
+        ];
+        
+        for (const staticPath of staticPaths) {
+          if (fs.existsSync(staticPath)) {
+            const buffer = fs.readFileSync(staticPath);
+            const ext = path.extname(staticPath).toLowerCase();
+            const contentType = ext === '.svg' ? 'image/svg+xml' : 
+                              ext === '.webp' ? 'image/webp' :
+                              ext === '.png' ? 'image/png' : 'image/jpeg';
+            
+            res.set('Cache-Control', 'public, max-age=3600');
+            res.set('Content-Type', contentType);
+            res.end(buffer);
+            return;
+          }
+        }
+      }
+      
       return res.status(404).json({ error: 'Image not found' });
+    }
+
+    // Check if this is a pre-generated thumbnail request
+    const isPreGeneratedThumbnail = imageData.buffer && 
+      imageData.contentType === 'image/webp' &&
+      imageData.buffer.length < 200000; // Likely a thumbnail if WebP and under 200KB
+    
+    // If this is already a pre-generated thumbnail, serve it directly
+    if (isPreGeneratedThumbnail) {
+      res.set('Cache-Control', 'public, max-age=31536000, immutable');
+      res.set('Content-Type', 'image/webp');
+      res.set('X-Thumbnail-Type', 'pre-generated-webp');
+      res.end(imageData.buffer);
+      return;
     }
     
     // Set appropriate headers for performance

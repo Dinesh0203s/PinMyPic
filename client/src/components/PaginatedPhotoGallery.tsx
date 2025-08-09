@@ -80,11 +80,16 @@ const PaginatedPhotoGallery: React.FC<PaginatedPhotoGalleryProps> = ({
   const responsivePhotosPerPage = useResponsivePhotosPerPage();
   const photosPerPage = propPhotosPerPage || responsivePhotosPerPage;
 
-  // Calculate pagination
+  // Calculate pagination - memoized to prevent infinite loops
+  const currentPhotos = useMemo(() => {
+    const startIndex = (currentPage - 1) * photosPerPage;
+    const endIndex = startIndex + photosPerPage;
+    return photos.slice(startIndex, endIndex);
+  }, [photos, currentPage, photosPerPage]);
+
   const totalPages = Math.ceil(photos.length / photosPerPage);
   const startIndex = (currentPage - 1) * photosPerPage;
   const endIndex = startIndex + photosPerPage;
-  const currentPhotos = photos.slice(startIndex, endIndex);
 
   // Reset to first page when photos change or photos per page changes
   useEffect(() => {
@@ -93,13 +98,22 @@ const PaginatedPhotoGallery: React.FC<PaginatedPhotoGalleryProps> = ({
     setErrorPhotos(new Set());
   }, [photos, photosPerPage]);
 
-  const handlePhotoLoad = (photoId: string) => {
+  const handlePhotoLoad = (photoId: string, photoIndex: number) => {
     setLoadedPhotos(prev => new Set(prev).add(photoId));
   };
 
-  const handlePhotoError = (photoId: string) => {
+  const handlePhotoError = (photoId: string, photoIndex: number) => {
     setErrorPhotos(prev => new Set(prev).add(photoId));
   };
+
+  // For now, make all photos visible immediately to fix the issue
+  // We'll improve ordering later
+  const [revealedPhotos, setRevealedPhotos] = useState<Set<string>>(new Set());
+  
+  // Make all current photos visible immediately
+  useEffect(() => {
+    setRevealedPhotos(new Set(currentPhotos.map(photo => photo.id)));
+  }, [currentPhotos]);
 
   const handleDownload = async (photo: Photo, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -184,16 +198,17 @@ const PaginatedPhotoGallery: React.FC<PaginatedPhotoGalleryProps> = ({
     <div className={`${className}`} data-gallery-container>
       {/* Photo Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4 mb-4 md:mb-6">
-        {currentPhotos.map((photo) => (
+        {currentPhotos.map((photo, index) => (
           <PhotoCard
             key={photo.id}
             photo={photo}
             onPhotoClick={onPhotoClick}
             onDownload={handleDownload}
-            onLoad={() => handlePhotoLoad(photo.id)}
-            onError={() => handlePhotoError(photo.id)}
+            onLoad={() => handlePhotoLoad(photo.id, index)}
+            onError={() => handlePhotoError(photo.id, index)}
             loaded={loadedPhotos.has(photo.id)}
             error={errorPhotos.has(photo.id)}
+            visible={revealedPhotos.has(photo.id)}
             showSaveToProfile={showSaveToProfile}
             savedPhotoIds={savedPhotoIds}
             onSavePhoto={onSavePhoto}
@@ -321,6 +336,7 @@ interface PhotoCardProps {
   onError: () => void;
   loaded: boolean;
   error: boolean;
+  visible: boolean;
   showSaveToProfile: boolean;
   savedPhotoIds: string[];
   onSavePhoto?: (photoId: string) => void;
@@ -337,6 +353,7 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
   onError,
   loaded,
   error,
+  visible,
   showSaveToProfile,
   savedPhotoIds,
   onSavePhoto,
@@ -363,7 +380,9 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
   const canShowSaveButton = showSaveToProfile && currentUser;
 
   return (
-    <Card className="group hover:shadow-xl transition-all duration-300 hover:scale-105 overflow-hidden cursor-pointer">
+    <Card className={`group hover:shadow-xl transition-all duration-300 hover:scale-105 overflow-hidden cursor-pointer ${
+      visible ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4'
+    } transition-all duration-500`}>
       <CardContent className="p-0 aspect-square relative">
         {/* Loading skeleton */}
         {!loaded && !error && (
@@ -383,6 +402,7 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
         {/* Progressive Image with optimized loading */}
         <ProgressiveImage
           src={photo.url}
+          thumbnailSrc={photo.thumbnailUrl} // Use pre-generated thumbnail URL
           alt={photo.filename || 'Photo'}
           className="w-full h-full object-cover transition-all duration-300 group-hover:scale-110"
           priority="high"

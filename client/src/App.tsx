@@ -8,6 +8,9 @@ import { AuthProvider } from "./contexts/AuthContext";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { Suspense, lazy, useEffect } from "react";
 import LoadingSpinner from "./components/LoadingSpinner";
+import ScrollToTop from "./components/ScrollToTop";
+import PerformanceMonitor from "./components/PerformanceMonitor";
+import { initializePerformanceOptimizations } from "./utils/performanceOptimizations";
 
 // Lazy load all pages for better performance
 const Index = lazy(() => import("./pages/Index"));
@@ -24,8 +27,6 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const ProtectedRoute = lazy(() => import("./components/ProtectedRoute"));
 // Import AdminStatusNotification normally since it's always needed
 import { AdminStatusNotification } from "./components/AdminStatusNotification";
-import PerformanceMonitor from "./components/PerformanceMonitor";
-import { initializePerformanceOptimizations } from "./utils/performanceOptimizations";
 
 // Optimized query client with enhanced performance settings
 const queryClient = new QueryClient({
@@ -63,16 +64,7 @@ const queryClient = new QueryClient({
   },
 });
 
-// Component to handle scroll to top on route changes
-const ScrollToTop = () => {
-  const location = useLocation();
-  
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [location.pathname]);
-  
-  return null;
-};
+// Use the imported ScrollToTop component
 
 const App = () => {
   useEffect(() => {

@@ -1,200 +1,205 @@
-// Service Worker for caching and performance optimization
+// Service Worker for offline functionality and caching
+const CACHE_NAME = 'pinmypic-v1.2.0';
+const STATIC_CACHE_NAME = 'pinmypic-static-v1.2.0';
+const IMAGE_CACHE_NAME = 'pinmypic-images-v1.2.0';
 
-const CACHE_NAME = 'pinmypic-v1.0.0';
-const STATIC_CACHE_URLS = [
+// Files to cache immediately
+const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  // Add other static resources
+  // Add other critical static assets
 ];
 
-const API_CACHE_PATTERNS = [
-  /^\/api\/events\/all/,
-  /^\/api\/user\/profile/,
-  /^\/api\/events\/\d+$/,
-];
+// Image cache strategy
+const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg'];
 
-const IMAGE_CACHE_PATTERNS = [
-  /^\/api\/images\//,
-  /^\/uploads\//,
-  /\.(jpg|jpeg|png|gif|webp|avif)$/i,
-];
-
-// Install event - cache static resources
+// Install event - cache static assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_CACHE_URLS);
-    })
+    caches.open(STATIC_CACHE_NAME)
+      .then(cache => cache.addAll(STATIC_ASSETS))
+      .then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((cacheName) => cacheName !== CACHE_NAME)
-          .map((cacheName) => caches.delete(cacheName))
-      );
-    })
+    caches.keys()
+      .then(cacheNames => {
+        return Promise.all(
+          cacheNames.map(cacheName => {
+            if (cacheName !== CACHE_NAME && 
+                cacheName !== STATIC_CACHE_NAME && 
+                cacheName !== IMAGE_CACHE_NAME) {
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      })
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// Fetch event - implement caching strategies
+// Fetch event - network first for API, cache first for assets
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET requests
-  if (request.method !== 'GET') return;
+  // Skip cross-origin requests
+  if (url.origin !== self.location.origin) {
+    return;
+  }
 
-  // Skip chrome-extension and other schemes
-  if (!url.protocol.startsWith('http')) return;
+  // API requests - network first with cache fallback
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(networkFirstStrategy(request));
+    return;
+  }
 
-  event.respondWith(
-    (async () => {
-      try {
-        // Strategy 1: Images - Cache First with fallback
-        if (IMAGE_CACHE_PATTERNS.some(pattern => pattern.test(url.pathname))) {
-          return await cacheFirst(request);
-        }
+  // Image requests - cache first with network fallback
+  if (isImageRequest(request)) {
+    event.respondWith(cacheFirstStrategy(request, IMAGE_CACHE_NAME));
+    return;
+  }
 
-        // Strategy 2: API calls - Network First with cache fallback
-        if (url.pathname.startsWith('/api/')) {
-          // Cache specific API patterns
-          if (API_CACHE_PATTERNS.some(pattern => pattern.test(url.pathname))) {
-            return await networkFirstWithStaleWhileRevalidate(request);
-          }
-          // Don't cache other API calls (mutations, etc.)
-          return await fetch(request);
-        }
-
-        // Strategy 3: Static resources - Stale While Revalidate
-        if (STATIC_CACHE_URLS.includes(url.pathname) || url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
-          return await staleWhileRevalidate(request);
-        }
-
-        // Default: Network only
-        return await fetch(request);
-      } catch (error) {
-        console.error('Service Worker fetch error:', error);
-        return new Response('Network error', { status: 503 });
-      }
-    })()
-  );
+  // Static assets - cache first
+  event.respondWith(cacheFirstStrategy(request, STATIC_CACHE_NAME));
 });
 
-// Caching strategies
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-
+// Network first strategy (for API calls)
+async function networkFirstStrategy(request) {
   try {
-    const response = await fetch(request);
-    if (response.ok) {
+    const networkResponse = await fetch(request);
+    
+    // Cache successful API responses (except POST/PUT/DELETE)
+    if (networkResponse.ok && request.method === 'GET') {
       const cache = await caches.open(CACHE_NAME);
-      cache.put(request, response.clone());
+      cache.put(request, networkResponse.clone());
     }
-    return response;
+    
+    return networkResponse;
   } catch (error) {
-    return new Response('Image not available', { status: 404 });
+    // Try cache on network failure
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    
+    // Return offline response for failed requests
+    return new Response(
+      JSON.stringify({ 
+        error: 'Offline', 
+        message: 'This feature is not available offline' 
+      }),
+      {
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
   }
 }
 
-async function networkFirstWithStaleWhileRevalidate(request) {
-  const cache = await caches.open(CACHE_NAME);
+// Cache first strategy (for static assets and images)
+async function cacheFirstStrategy(request, cacheName) {
+  const cachedResponse = await caches.match(request);
   
+  if (cachedResponse) {
+    return cachedResponse;
+  }
+
   try {
-    const response = await fetch(request);
-    if (response.ok) {
-      // Update cache in background
-      cache.put(request, response.clone());
-      // Add cache timestamp
-      const headers = new Headers(response.headers);
-      headers.set('sw-cache-timestamp', Date.now().toString());
-      
-      return new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: headers,
-      });
+    const networkResponse = await fetch(request);
+    
+    if (networkResponse.ok) {
+      const cache = await caches.open(cacheName);
+      cache.put(request, networkResponse.clone());
     }
-    throw new Error('Network response not ok');
+    
+    return networkResponse;
   } catch (error) {
-    // Fall back to cache
-    const cached = await cache.match(request);
-    if (cached) {
-      const headers = new Headers(cached.headers);
-      headers.set('sw-from-cache', 'true');
-      
-      return new Response(cached.body, {
-        status: cached.status,
-        statusText: cached.statusText,
-        headers: headers,
-      });
+    // Return fallback for failed image requests
+    if (isImageRequest(request)) {
+      return new Response(
+        '<svg width="300" height="200" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="50%" text-anchor="middle" fill="#9ca3af">Image unavailable</text></svg>',
+        {
+          headers: { 'Content-Type': 'image/svg+xml' }
+        }
+      );
     }
+    
     throw error;
   }
 }
 
-async function staleWhileRevalidate(request) {
-  const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
-  
-  // Start network request immediately
-  const networkPromise = fetch(request).then(response => {
-    if (response.ok) {
-      cache.put(request, response.clone());
-    }
-    return response;
-  });
-
-  // Return cached version immediately if available
-  if (cached) {
-    return cached;
-  }
-
-  // If no cached version, wait for network
-  return networkPromise;
+function isImageRequest(request) {
+  return IMAGE_EXTENSIONS.some(ext => request.url.includes(ext)) ||
+         request.destination === 'image' ||
+         request.url.includes('/api/images/');
 }
 
-// Background sync for failed requests
+// Background sync for photo uploads
 self.addEventListener('sync', (event) => {
-  if (event.tag === 'background-sync') {
-    event.waitUntil(
-      // Retry failed requests
-      retryFailedRequests()
-    );
+  if (event.tag === 'photo-upload') {
+    event.waitUntil(syncPhotoUploads());
   }
 });
 
-async function retryFailedRequests() {
-  // Implementation would depend on storing failed requests
-  console.log('Retrying failed requests...');
+async function syncPhotoUploads() {
+  // Implementation for syncing failed photo uploads
+  // This would require storing failed uploads in IndexedDB
+  console.log('Syncing photo uploads...');
 }
 
-// Push notifications (if needed)
+// Push notifications (for future use)
 self.addEventListener('push', (event) => {
-  if (event.data) {
-    const data = event.data.json();
-    event.waitUntil(
-      self.registration.showNotification(data.title, {
-        body: data.body,
-        icon: data.icon || '/icon-192x192.png',
-        badge: '/badge-72x72.png',
-      })
-    );
-  }
+  const options = {
+    body: event.data ? event.data.text() : 'New photos available!',
+    icon: '/icon-192x192.png',
+    badge: '/badge-72x72.png',
+    tag: 'pinmypic-notification',
+    data: {
+      url: '/'
+    }
+  };
+
+  event.waitUntil(
+    self.registration.showNotification('PinMyPic', options)
+  );
 });
 
-// Notification click handler
+// Handle notification clicks
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+
   event.waitUntil(
-    clients.openWindow(event.notification.data?.url || '/')
+    clients.openWindow(event.notification.data.url || '/')
   );
+});
+
+// Cache size management
+async function manageCacheSize() {
+  const cache = await caches.open(IMAGE_CACHE_NAME);
+  const requests = await cache.keys();
+  
+  // Limit image cache to 100 items
+  if (requests.length > 100) {
+    const requestsToDelete = requests.slice(0, requests.length - 100);
+    await Promise.all(
+      requestsToDelete.map(request => cache.delete(request))
+    );
+  }
+}
+
+// Periodic cache management
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+  
+  if (event.data && event.data.type === 'MANAGE_CACHE') {
+    event.waitUntil(manageCacheSize());
+  }
 });

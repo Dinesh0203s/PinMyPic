@@ -1,4 +1,4 @@
-import { ObjectId, Collection } from 'mongodb';
+import { ObjectId, Collection, GridFSBucket } from 'mongodb';
 import { mongoService } from './mongodb';
 import { 
   type User, 
@@ -963,6 +963,52 @@ export class MongoDBStorage implements IStorage {
       );
     } catch (error) {
       console.error('Error updating event photo count:', error);
+    }
+  }
+
+  // GridFS image methods
+  async getImageFromGridFS(fileId: string): Promise<{ buffer: Buffer; contentType: string } | null> {
+    try {
+      await this.ensureConnection();
+      const db = mongoService.getDb();
+      const bucket = new GridFSBucket(db, { bucketName: 'photos' });
+
+      // Convert string fileId to ObjectId
+      const objectId = new ObjectId(fileId);
+      
+      // Check if file exists
+      const files = await bucket.find({ _id: objectId }).toArray();
+      if (files.length === 0) {
+        console.log(`Image not found in GridFS: ${fileId}`);
+        return null;
+      }
+
+      const fileInfo = files[0];
+      const downloadStream = bucket.openDownloadStream(objectId);
+      
+      return new Promise((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        
+        downloadStream.on('data', (chunk) => {
+          chunks.push(chunk);
+        });
+        
+        downloadStream.on('end', () => {
+          const buffer = Buffer.concat(chunks);
+          resolve({
+            buffer,
+            contentType: fileInfo.contentType || 'image/jpeg'
+          });
+        });
+        
+        downloadStream.on('error', (error) => {
+          console.error(`Error downloading image from GridFS: ${fileId}`, error);
+          reject(error);
+        });
+      });
+    } catch (error) {
+      console.error(`Error getting image from GridFS: ${fileId}`, error);
+      return null;
     }
   }
 }

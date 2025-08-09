@@ -47,7 +47,8 @@ const ProgressiveImage = ({
   
   const thumb = useMemo(() => {
     if (thumbnailSrc) return thumbnailSrc;
-    // For GridFS images, append thumbnail parameter to the original URL
+    // For GridFS images, the thumbnailUrl should already point to pre-generated WebP thumbnails
+    // If not, fall back to on-the-fly thumbnail generation
     if (src.startsWith('/api/images/')) {
       return `${src}?thumbnail=true&quality=60`;
     }

@@ -55,6 +55,8 @@ import { AnalyticsReport } from '@/components/AnalyticsReport';
 import { AdminUsersManagement } from '@/components/AdminUsersManagement';
 import AdminRoleManagement from '@/components/AdminRoleManagement';
 import QRManagement from '@/components/QRManagement';
+
+
 import { Booking, ContactMessage, Event, Package } from '@shared/types';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -1225,124 +1227,115 @@ const AdminDashboard = () => {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="px-2 sm:px-6">
-                <div className="overflow-x-auto -mx-2 sm:mx-0 border rounded-lg scrollbar-thin">
-                  <div className="inline-block min-w-full align-middle">
-                    <Table className="min-w-full text-xs sm:text-sm">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 select-none px-2 sm:px-4"
-                        onClick={() => handleSort('name')}
-                      >
-                        <div className="flex items-center gap-2">
-                          Client
-                          {sortField === 'name' && (
-                            sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </div>
-                      </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 select-none px-2 sm:px-4"
-                        onClick={() => handleSort('eventType')}
-                      >
-                        <div className="flex items-center gap-1 sm:gap-2">
-                          <span className="mobile-truncate">Event Type</span>
-                          {sortField === 'eventType' && (
-                            sortDirection === 'asc' ? <ChevronUp className="h-3 w-3 sm:h-4 sm:w-4" /> : <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4" />
-                          )}
-                        </div>
-                      </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 select-none px-2 sm:px-4"
-                        onClick={() => handleSort('eventDate')}
-                      >
-                        <div className="flex items-center gap-1 sm:gap-2">
-                          <span className="mobile-truncate">Date</span>
-                          {sortField === 'eventDate' && (
-                            sortDirection === 'asc' ? <ChevronUp className="h-3 w-3 sm:h-4 sm:w-4" /> : <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4" />
-                          )}
-                        </div>
-                      </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 select-none px-2 sm:px-4"
-                        onClick={() => handleSort('status')}
-                      >
-                        <div className="flex items-center gap-1 sm:gap-2">
-                          <span className="mobile-truncate">Status</span>
-                          {sortField === 'status' && (
-                            sortDirection === 'asc' ? <ChevronUp className="h-3 w-3 sm:h-4 sm:w-4" /> : <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4" />
-                          )}
-                        </div>
-                      </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 select-none px-2 sm:px-4"
-                        onClick={() => handleSort('amount')}
-                      >
-                        <div className="flex items-center gap-1 sm:gap-2">
-                          <span className="mobile-truncate">Amount</span>
-                          {sortField === 'amount' && (
-                            sortDirection === 'asc' ? <ChevronUp className="h-3 w-3 sm:h-4 sm:w-4" /> : <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4" />
-                          )}
-                        </div>
-                      </TableHead>
-                      <TableHead className="px-2 sm:px-4">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {getSortedAndFilteredBookings().length > 0 ? (
-                      getSortedAndFilteredBookings().map((booking) => (
-                        <TableRow key={booking.id}>
-                          <TableCell className="font-medium px-2 sm:px-4 mobile-truncate" title={booking.name || 'Unknown Client'}>{booking.name || 'Unknown Client'}</TableCell>
-                          <TableCell className="px-2 sm:px-4 mobile-truncate">{booking.eventType}</TableCell>
-                          <TableCell className="px-2 sm:px-4 text-xs sm:text-sm">{new Date(booking.eventDate).toLocaleDateString()}</TableCell>
-                          <TableCell className="px-2 sm:px-4">
-                            <Select 
-                              value={booking.status} 
-                              onValueChange={(newStatus) => handleBookingAction(booking.id, newStatus as 'confirmed' | 'cancelled' | 'pending')}
-                            >
-                              <SelectTrigger className={`w-24 sm:w-32 ${getStatusColor(booking.status)} border-0 text-xs sm:text-sm`}>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="pending">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                                    Pending
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="confirmed">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                    Confirmed
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="cancelled">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                                    Cancelled
-                                  </div>
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell className="px-2 sm:px-4">
-                            <div className="flex items-center gap-1">
-                              <span className="text-xs sm:text-sm">₹</span>
-                              <input
-                                type="number"
-                                value={booking.amount || 0}
-                                onChange={(e) => handleAmountChange(booking.id, Number(e.target.value))}
-                                className="w-16 sm:w-20 px-1 sm:px-2 py-1 border border-gray-300 rounded text-xs sm:text-sm"
-                                min="0"
-                                step="50"
-                              />
+              <CardContent>
+                {/* Results Summary */}
+                <div className="flex justify-between items-center mb-4">
+                  <p className="text-sm text-gray-600">
+                    Showing {getSortedAndFilteredBookings().length} of {bookings.length} bookings
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {getSortedAndFilteredBookings().length > 0 ? (
+                    getSortedAndFilteredBookings().map((booking) => (
+                      <Card key={booking.id} className="relative hover:shadow-lg transition-shadow">
+                        <CardHeader className="pb-4">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <CardTitle className="text-lg font-semibold text-gray-900 mb-1">
+                                {booking.name || 'Unknown Client'}
+                              </CardTitle>
+                              <div className="flex items-center text-sm text-gray-600 mb-2">
+                                <Calendar className="h-4 w-4 mr-1" />
+                                {booking.eventType}
+                              </div>
+                              <div className="flex items-center text-sm text-gray-600 mb-2">
+                                <Clock className="h-4 w-4 mr-1" />
+                                {new Date(booking.eventDate).toLocaleDateString()}
+                              </div>
+                              {booking.location && (
+                                <div className="flex items-center text-sm text-gray-600 mb-2">
+                                  <MapPin className="h-4 w-4 mr-1" />
+                                  {booking.location}
+                                </div>
+                              )}
                             </div>
-                          </TableCell>
-                          <TableCell className="px-2 sm:px-4">
-                            <div className="flex gap-1 sm:gap-2">
-                              <Button variant="ghost" size="sm" onClick={() => handleViewBooking(booking)}>
-                                <Eye className="h-4 w-4" />
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="space-y-4">
+                            {/* Status */}
+                            <div>
+                              <Label className="text-sm font-medium mb-2 block">Status</Label>
+                              <Select 
+                                value={booking.status} 
+                                onValueChange={(newStatus) => handleBookingAction(booking.id, newStatus as 'confirmed' | 'cancelled' | 'pending')}
+                              >
+                                <SelectTrigger className={`w-full ${getStatusColor(booking.status)} border-0`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="pending">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                                      Pending
+                                    </div>
+                                  </SelectItem>
+                                  <SelectItem value="confirmed">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                      Confirmed
+                                    </div>
+                                  </SelectItem>
+                                  <SelectItem value="cancelled">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                      Cancelled
+                                    </div>
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {/* Amount */}
+                            <div>
+                              <Label className="text-sm font-medium mb-2 block">Amount</Label>
+                              <div className="flex items-center gap-2">
+                                <span className="text-lg font-semibold">₹</span>
+                                <input
+                                  type="number"
+                                  value={booking.amount || 0}
+                                  onChange={(e) => handleAmountChange(booking.id, Number(e.target.value))}
+                                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                  min="0"
+                                  step="50"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Contact Info */}
+                            {booking.email && (
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Mail className="h-4 w-4 mr-2" />
+                                <a href={`mailto:${booking.email}`} className="text-blue-600 hover:underline truncate">
+                                  {booking.email}
+                                </a>
+                              </div>
+                            )}
+                            {booking.phone && (
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Phone className="h-4 w-4 mr-2" />
+                                <a href={`tel:${booking.phone}`} className="text-blue-600 hover:underline">
+                                  {booking.phone}
+                                </a>
+                              </div>
+                            )}
+
+                            {/* Actions */}
+                            <div className="flex gap-2 pt-2 border-t">
+                              <Button variant="outline" size="sm" onClick={() => handleViewBooking(booking)} className="flex-1">
+                                <Eye className="h-4 w-4 mr-1" />
+                                View
                               </Button>
                               <DeleteConfirmation
                                 itemName={booking.name || 'booking'}
@@ -1350,7 +1343,7 @@ const AdminDashboard = () => {
                                 onConfirm={() => handleDeleteBooking(booking.id)}
                                 trigger={
                                   <Button 
-                                    variant="ghost" 
+                                    variant="outline" 
                                     size="sm"
                                     className="text-red-600 hover:text-red-700 hover:bg-red-50"
                                   >
@@ -1359,31 +1352,43 @@ const AdminDashboard = () => {
                                 }
                               />
                             </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                          <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                          <p>
-                            {bookings.length === 0 
-                              ? 'No bookings found' 
-                              : 'No bookings match your filters'
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  ) : (
+                    <div className="col-span-full text-center py-12">
+                      <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p className="text-gray-500 mb-4">
+                        {bookings.length === 0 
+                          ? 'No bookings found' 
+                          : 'No bookings match your filters'
+                        }
+                      </p>
+                      <p className="text-sm text-gray-400 mb-4">
+                        {bookings.length === 0 
+                          ? 'Create your first booking to get started' 
+                          : 'Try adjusting your search or filter options'
+                        }
+                      </p>
+                      {bookings.length === 0 && (
+                        <CreateBookingDialog onBookingCreated={() => {
+                          const refreshData = async () => {
+                            try {
+                              const bookingsRes = await fetch('/api/bookings');
+                              if (bookingsRes.ok) {
+                                const bookingsData = await bookingsRes.json();
+                                setBookings(bookingsData);
+                              }
+                            } catch (error) {
+                              console.error('Error refreshing bookings:', error);
                             }
-                          </p>
-                          <p className="text-sm">
-                            {bookings.length === 0 
-                              ? 'Create your first booking to get started' 
-                              : 'Try adjusting your search or filter options'
-                            }
-                          </p>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                    </Table>
-                  </div>
+                          };
+                          refreshData();
+                        }} />
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -1567,13 +1572,13 @@ const AdminDashboard = () => {
             <TabsContent value="messages" className="space-y-6">
             <Card>
               <CardHeader>
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
                   <div>
                     <CardTitle>Contact Messages</CardTitle>
                     <CardDescription>Manage messages from contact form submissions</CardDescription>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <Badge variant="secondary" className="px-3 py-1">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <Badge variant="secondary" className="px-3 py-1 w-fit">
                       {messages.filter(m => !m.isRead).length} unread
                     </Badge>
                     {messages.length > 0 && (
@@ -1582,7 +1587,7 @@ const AdminDashboard = () => {
                         itemType="messages"
                         onConfirm={handleClearAllMessages}
                         trigger={
-                          <Button variant="destructive" size="sm">
+                          <Button variant="destructive" size="sm" className="w-full sm:w-auto">
                             <Trash2 className="h-4 w-4 mr-2" />
                             Clear All
                           </Button>
@@ -1593,112 +1598,117 @@ const AdminDashboard = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[100px]">Date</TableHead>
-                        <TableHead className="w-[120px]">Name</TableHead>
-                        <TableHead className="w-[200px]">Email</TableHead>
-                        <TableHead className="w-[150px]">Subject</TableHead>
-                        <TableHead className="w-[250px]">Message</TableHead>
-                        <TableHead className="w-[80px] text-center">Status</TableHead>
-                        <TableHead className="w-[100px] text-center">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {messages.length > 0 ? (
-                        messages.map((message) => (
-                          <TableRow key={message.id} className={!message.isRead ? 'bg-blue-50' : ''}>
-                            <TableCell className="text-sm font-medium">
-                              {new Date(message.createdAt).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              <div className="truncate" title={message.name}>
+                {/* Results Summary */}
+                <div className="flex justify-between items-center mb-4">
+                  <p className="text-sm text-gray-600">
+                    Showing {messages.length} message{messages.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {messages.length > 0 ? (
+                    messages.map((message) => (
+                      <Card key={message.id} className={`relative hover:shadow-lg transition-shadow ${!message.isRead ? 'ring-2 ring-blue-200 bg-blue-50/30' : ''}`}>
+                        <CardHeader className="pb-3">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1 min-w-0">
+                              <CardTitle className="text-lg font-semibold text-gray-900 mb-1 truncate">
                                 {message.name}
+                              </CardTitle>
+                              <div className="flex items-center text-sm text-gray-600 mb-2">
+                                <Clock className="h-4 w-4 mr-1 flex-shrink-0" />
+                                {new Date(message.createdAt).toLocaleDateString()}
                               </div>
-                            </TableCell>
-                            <TableCell>
-                              <a 
-                                href={`mailto:${message.email}`} 
-                                className="text-blue-600 hover:underline truncate block" 
-                                title={message.email}
-                              >
-                                {message.email}
-                              </a>
-                            </TableCell>
-                            <TableCell>
-                              <div className="truncate" title={message.subject || 'No subject'}>
+                              <div className="flex items-center text-sm text-gray-600 mb-2">
+                                <Mail className="h-4 w-4 mr-1 flex-shrink-0" />
+                                <a 
+                                  href={`mailto:${message.email}`} 
+                                  className="text-blue-600 hover:underline truncate"
+                                  title={message.email}
+                                >
+                                  {message.email}
+                                </a>
+                              </div>
+                            </div>
+                            <Badge 
+                              variant={message.isRead ? "secondary" : "default"} 
+                              className="whitespace-nowrap ml-2"
+                            >
+                              {message.isRead ? 'Read' : 'Unread'}
+                            </Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="space-y-3">
+                            {/* Subject */}
+                            <div>
+                              <Label className="text-sm font-medium mb-1 block">Subject</Label>
+                              <p className="text-sm text-gray-700 line-clamp-2" title={message.subject || 'No subject'}>
                                 {message.subject || 'No subject'}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="truncate" title={message.message}>
+                              </p>
+                            </div>
+
+                            {/* Message */}
+                            <div>
+                              <Label className="text-sm font-medium mb-1 block">Message</Label>
+                              <p className="text-sm text-gray-700 line-clamp-3" title={message.message}>
                                 {message.message}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge variant={message.isRead ? "secondary" : "default"} className="whitespace-nowrap">
-                                {message.isRead ? 'Read' : 'Unread'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex gap-1 justify-center">
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={() => {
-                                    setSelectedMessage(message);
-                                    setMessageDialogOpen(true);
-                                    // Mark as read
-                                    fetch(`/api/contact/${message.id}/read`, { method: 'PATCH' })
-                                      .then(() => refreshData())
-                                      .catch(console.error);
-                                  }}
-                                  title="View message"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm"
-                                  className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700"
-                                  onClick={() => window.location.href = `mailto:${message.email}?subject=Re: ${message.subject || 'Your inquiry'}`}
-                                  title="Reply via email"
-                                >
-                                  <Mail className="h-4 w-4" />
-                                </Button>
-                                <DeleteConfirmation
-                                  itemName={`message from ${message.name}`}
-                                  itemType="message"
-                                  onConfirm={() => handleDeleteMessage(message.id)}
-                                  trigger={
-                                    <Button 
-                                      variant="ghost" 
-                                      size="sm"
-                                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                                      title="Delete message"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  }
-                                />
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                          <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                          <p>No messages received yet</p>
-                          <p className="text-sm mt-2">Contact form submissions will appear here</p>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                  </Table>
+                              </p>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex gap-2 pt-3 border-t">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                className="flex-1"
+                                onClick={() => {
+                                  setSelectedMessage(message);
+                                  setMessageDialogOpen(true);
+                                  // Mark as read
+                                  fetch(`/api/contact/${message.id}/read`, { method: 'PATCH' })
+                                    .then(() => refreshData())
+                                    .catch(console.error);
+                                }}
+                              >
+                                <Eye className="h-4 w-4 mr-1" />
+                                View
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                onClick={() => window.location.href = `mailto:${message.email}?subject=Re: ${message.subject || 'Your inquiry'}`}
+                                title="Reply via email"
+                              >
+                                <Mail className="h-4 w-4" />
+                              </Button>
+                              <DeleteConfirmation
+                                itemName={`message from ${message.name}`}
+                                itemType="message"
+                                onConfirm={() => handleDeleteMessage(message.id)}
+                                trigger={
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                }
+                              />
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  ) : (
+                    <div className="col-span-full text-center py-12">
+                      <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p className="text-gray-500 mb-4">No messages received yet</p>
+                      <p className="text-sm text-gray-400">Contact form submissions will appear here</p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -2355,66 +2365,76 @@ const AdminDashboard = () => {
 
       {/* Message Details Dialog */}
       <Dialog open={messageDialogOpen} onOpenChange={setMessageDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold">Message Details</DialogTitle>
+        <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="text-lg sm:text-xl font-bold">Message Details</DialogTitle>
           </DialogHeader>
           
           {selectedMessage && (
-            <div className="space-y-4">
+            <div className="space-y-4 pb-4">
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <User className="h-5 w-5" />
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                    <User className="h-4 w-4 sm:h-5 sm:w-5" />
                     Sender Information
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0">
                     <span className="font-medium text-sm text-gray-600">Name:</span>
-                    <span className="font-semibold">{selectedMessage.name}</span>
+                    <span className="font-semibold text-sm sm:text-base break-words">{selectedMessage.name}</span>
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0">
                     <span className="font-medium text-sm text-gray-600">Email:</span>
-                    <span>{selectedMessage.email}</span>
+                    <a 
+                      href={`mailto:${selectedMessage.email}`} 
+                      className="text-blue-600 hover:underline text-sm sm:text-base break-words"
+                    >
+                      {selectedMessage.email}
+                    </a>
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0">
                     <span className="font-medium text-sm text-gray-600">Date:</span>
-                    <span>{new Date(selectedMessage.createdAt).toLocaleString()}</span>
+                    <span className="text-sm sm:text-base">{new Date(selectedMessage.createdAt).toLocaleString()}</span>
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Message Content</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base sm:text-lg">Message Content</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {selectedMessage.subject && (
                     <div>
-                      <span className="font-medium text-sm text-gray-600 block mb-1">Subject:</span>
-                      <p className="font-semibold">{selectedMessage.subject}</p>
+                      <span className="font-medium text-sm text-gray-600 block mb-2">Subject:</span>
+                      <p className="font-semibold text-sm sm:text-base break-words bg-gray-50 p-3 rounded-lg">{selectedMessage.subject}</p>
                     </div>
                   )}
                   <div>
-                    <span className="font-medium text-sm text-gray-600 block mb-1">Message:</span>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <p className="text-gray-800 whitespace-pre-wrap">{selectedMessage.message}</p>
+                    <span className="font-medium text-sm text-gray-600 block mb-2">Message:</span>
+                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border">
+                      <p className="text-gray-800 whitespace-pre-wrap text-sm sm:text-base leading-relaxed break-words">{selectedMessage.message}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <div className="flex justify-end gap-3 pt-4">
-                <Button variant="outline" onClick={() => setMessageDialogOpen(false)}>
+              <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setMessageDialogOpen(false)}
+                  className="w-full sm:w-auto order-2 sm:order-1"
+                >
                   Close
                 </Button>
                 <Button 
                   onClick={() => window.location.href = `mailto:${selectedMessage.email}?subject=Re: ${selectedMessage.subject || 'Your inquiry'}`}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto order-1 sm:order-2"
                 >
                   <Mail className="h-4 w-4 mr-2" />
-                  Reply via Email
+                  <span className="hidden sm:inline">Reply via Email</span>
+                  <span className="sm:hidden">Reply</span>
                 </Button>
               </div>
             </div>

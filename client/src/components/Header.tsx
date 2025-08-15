@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Menu, X, Camera, User, Settings, LogOut, Shield, QrCode } from 'lucide-react';
+import { Menu, X, Camera, User, Settings, LogOut, Shield, QrCode, Heart } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,11 +12,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import SavedPhotosModal from '@/components/SavedPhotosModal';
 import logoImage from '@assets/pinmypic_removed bg_1750753890638.png';
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [savedPhotosModalOpen, setSavedPhotosModalOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, userData, logout, loginWithGoogle } = useAuth();
@@ -152,16 +154,37 @@ const Header = () => {
                       </div>
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-56" align="end" forceMount>
-                    <div className="flex items-center justify-start gap-2 p-2">
-                      <div className="flex flex-col space-y-1 leading-none">
+                  <DropdownMenuContent className="w-64" align="end" forceMount>
+                    <div className="flex items-center justify-start gap-3 p-3">
+                      <div className="flex-shrink-0">
+                        {(userData?.customPhotoURL || currentUser.photoURL) ? (
+                          <img
+                            className="h-10 w-10 rounded-full object-cover"
+                            src={(userData?.customPhotoURL || currentUser.photoURL) as string}
+                            alt={currentUser.displayName || 'User'}
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-white font-semibold">
+                            {currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : currentUser.email?.charAt(0).toUpperCase() || 'U'}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col space-y-1 leading-none min-w-0 flex-1">
                         {currentUser.displayName && (
-                          <p className="font-medium">{currentUser.displayName}</p>
+                          <p className="font-semibold text-gray-900 truncate">{currentUser.displayName}</p>
                         )}
                         {currentUser.email && (
-                          <p className="w-[200px] truncate text-sm text-muted-foreground">
+                          <p className="text-sm text-gray-500 truncate">
                             {currentUser.email}
                           </p>
+                        )}
+                        {hasAdminDashboardAccess(userData) && (
+                          <div className="flex items-center mt-1">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+                              <Shield className="h-3 w-3 mr-1" />
+                              {getAdminRoleDisplayName(userData?.adminRole)}
+                            </span>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -172,14 +195,23 @@ const Header = () => {
                         Profile
                       </Link>
                     </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link to="/saved-photos" className="flex items-center">
+                        <Heart className="mr-2 h-4 w-4" />
+                        Saved Photos
+                      </Link>
+                    </DropdownMenuItem>
                     {hasAdminDashboardAccess(userData) && (
                       <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem asChild>
-                          <Link to="/admin" className="flex items-center">
-                            <Shield className="mr-2 h-4 w-4" />
-                            Admin Dashboard
-                            <span className="ml-2 text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded">
+                          <Link to="/admin" className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <Shield className="mr-2 h-4 w-4" />
+                              Admin Dashboard
+                            </div>
+                            <span className="ml-2 text-xs bg-gradient-to-r from-blue-500 to-purple-600 text-white px-2 py-0.5 rounded-full font-medium">
                               {getAdminRoleDisplayName(userData?.adminRole)}
                             </span>
                           </Link>
@@ -233,16 +265,37 @@ const Header = () => {
                     </div>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="end" forceMount>
-                  <div className="flex items-center justify-start gap-2 p-2">
-                    <div className="flex flex-col space-y-1 leading-none">
+                <DropdownMenuContent className="w-64" align="end" forceMount>
+                  <div className="flex items-center justify-start gap-3 p-3">
+                    <div className="flex-shrink-0">
+                      {(userData?.customPhotoURL || currentUser.photoURL) ? (
+                        <img
+                          className="h-10 w-10 rounded-full object-cover"
+                          src={(userData?.customPhotoURL || currentUser.photoURL) as string}
+                          alt={currentUser.displayName || 'User'}
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-white font-semibold">
+                          {currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : currentUser.email?.charAt(0).toUpperCase() || 'U'}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col space-y-1 leading-none min-w-0 flex-1">
                       {currentUser.displayName && (
-                        <p className="font-medium">{currentUser.displayName}</p>
+                        <p className="font-semibold text-gray-900 truncate">{currentUser.displayName}</p>
                       )}
                       {currentUser.email && (
-                        <p className="w-[200px] truncate text-sm text-muted-foreground">
+                        <p className="text-sm text-gray-500 truncate">
                           {currentUser.email}
                         </p>
+                      )}
+                      {hasAdminDashboardAccess(userData) && (
+                        <div className="flex items-center mt-1">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+                            <Shield className="h-3 w-3 mr-1" />
+                            {getAdminRoleDisplayName(userData?.adminRole)}
+                          </span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -258,6 +311,13 @@ const Header = () => {
                     <Link to="/profile" className="flex items-center">
                       <User className="mr-2 h-4 w-4" />
                       Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/saved-photos" className="flex items-center">
+                      <Heart className="mr-2 h-4 w-4" />
+                      Saved Photos
                     </Link>
                   </DropdownMenuItem>
                   {hasAdminDashboardAccess(userData) && (
@@ -355,6 +415,14 @@ const Header = () => {
                       <User className="h-4 w-4" />
                       Profile
                     </Link>
+                    <Link 
+                      to="/saved-photos"
+                      className="flex items-center gap-2 text-gray-700 hover:text-pink-500 font-medium"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      <Heart className="h-4 w-4" />
+                      Saved Photos
+                    </Link>
                     {(userData?.isAdmin || currentUser?.email === 'dond2674@gmail.com') && (
                       <Link 
                         to="/admin"
@@ -393,6 +461,14 @@ const Header = () => {
           </div>
         )}
       </div>
+      
+      {/* Saved Photos Modal */}
+      {currentUser && (
+        <SavedPhotosModal
+          open={savedPhotosModalOpen}
+          onOpenChange={setSavedPhotosModalOpen}
+        />
+      )}
     </header>
   );
 };

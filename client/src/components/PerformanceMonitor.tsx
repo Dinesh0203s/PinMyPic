@@ -39,9 +39,9 @@ const PerformanceMonitor: React.FC = () => {
       return;
     }
 
-    // Toggle with Ctrl+Shift+P
+    // Toggle with Ctrl+Shift+Q
     const handleKeyboard = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key === 'P') {
+      if (e.ctrlKey && e.shiftKey && e.key === 'Q') {
         setIsVisible(prev => !prev);
       }
     };
@@ -188,7 +188,7 @@ const PerformanceMonitor: React.FC = () => {
           </div>
 
           <div className="text-xs text-gray-400 pt-2 border-t border-gray-600">
-            Press Ctrl+Shift+P to toggle
+            Press Ctrl+Shift+Q to toggle
           </div>
         </CardContent>
       </Card>

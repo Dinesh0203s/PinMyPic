@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { QrCode, Download, Eye, Trash2, Plus, Clock, Users, Calendar, ExternalLink } from 'lucide-react';
+import { QrCode, Download, Eye, Trash2, Plus, Clock, Users, Calendar, ExternalLink, Edit } from 'lucide-react';
 import { Event, QRCode as QRCodeType } from "@shared/types";
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -27,6 +27,12 @@ const QRManagement: React.FC<QRManagementProps> = () => {
   const [selectedQRCode, setSelectedQRCode] = useState<QRCodeType | null>(null);
   const [useCustomDomain, setUseCustomDomain] = useState(false);
   const [customDomain, setCustomDomain] = useState("");
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingQRCode, setEditingQRCode] = useState<QRCodeType | null>(null);
+  const [extendHours, setExtendHours] = useState("24");
+  const [noExpiration, setNoExpiration] = useState(false);
+  const [noUsageLimit, setNoUsageLimit] = useState(false);
+  const [newMaxUsage, setNewMaxUsage] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currentUser } = useAuth();
@@ -187,6 +193,42 @@ const QRManagement: React.FC<QRManagementProps> = () => {
     },
   });
 
+  // Edit QR code mutation
+  const editQRCodeMutation = useMutation({
+    mutationFn: async (data: { qrCodeId: string; updates: any }) => {
+      if (!currentUser) throw new Error('User not authenticated');
+      
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`/api/admin/qr-codes/${data.qrCodeId}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(data.updates),
+      });
+      if (!response.ok) throw new Error('Failed to update QR code');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/qr-codes'] });
+      setEditDialogOpen(false);
+      setEditingQRCode(null);
+      resetEditForm();
+      toast({
+        title: "QR Code Updated",
+        description: "QR code settings updated successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to update QR code",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateQRCode = async () => {
     if (!selectedEvent) return;
 
@@ -223,6 +265,47 @@ const QRManagement: React.FC<QRManagementProps> = () => {
   const viewQRCode = (qrCode: QRCodeType) => {
     setSelectedQRCode(qrCode);
     setViewQRDialogOpen(true);
+  };
+
+  const editQRCode = (qrCode: QRCodeType) => {
+    setEditingQRCode(qrCode);
+    setNoExpiration(false);
+    setNoUsageLimit(!qrCode.maxUsage);
+    setNewMaxUsage(qrCode.maxUsage?.toString() || "");
+    setExtendHours("24");
+    setEditDialogOpen(true);
+  };
+
+  const resetEditForm = () => {
+    setExtendHours("24");
+    setNoExpiration(false);
+    setNoUsageLimit(false);
+    setNewMaxUsage("");
+  };
+
+  const handleEditQRCode = () => {
+    if (!editingQRCode) return;
+
+    const updates: any = {};
+    
+    if (noExpiration) {
+      updates.noExpiration = true;
+    } else if (extendHours && parseInt(extendHours) > 0) {
+      updates.extendHours = parseInt(extendHours);
+    }
+    
+    if (noUsageLimit) {
+      updates.noUsageLimit = true;
+    } else if (newMaxUsage && parseInt(newMaxUsage) > 0) {
+      updates.maxUsage = parseInt(newMaxUsage);
+    }
+
+    if (Object.keys(updates).length > 0) {
+      editQRCodeMutation.mutate({
+        qrCodeId: editingQRCode.id,
+        updates
+      });
+    }
   };
 
   const isExpired = (expiresAt: string) => {
@@ -265,10 +348,10 @@ const QRManagement: React.FC<QRManagementProps> = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold">QR Code Management</h2>
-          <p className="text-gray-600">Create and manage QR codes for event access with custom expiration times</p>
+          <h2 className="text-xl sm:text-2xl font-bold">QR Code Management</h2>
+          <p className="text-sm sm:text-base text-gray-600">Create and manage QR codes for event access with custom expiration times</p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={(open) => {
           setIsCreateDialogOpen(open);
@@ -283,12 +366,12 @@ const QRManagement: React.FC<QRManagementProps> = () => {
           }
         }}>
           <DialogTrigger asChild>
-            <Button className="flex items-center gap-2">
+            <Button className="flex items-center gap-2 w-full sm:w-auto">
               <Plus className="h-4 w-4" />
               Create QR Code
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md mx-4 sm:mx-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <QrCode className="h-5 w-5" />
@@ -371,6 +454,7 @@ const QRManagement: React.FC<QRManagementProps> = () => {
                     <SelectItem value="72">72 Hours (3 Days)</SelectItem>
                     <SelectItem value="168">1 Week</SelectItem>
                     <SelectItem value="720">1 Month</SelectItem>
+                    <SelectItem value="87600">No Limit (10 years)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -431,7 +515,7 @@ const QRManagement: React.FC<QRManagementProps> = () => {
         </Dialog>
       </div>
 
-      {/* QR Codes Table */}
+      {/* QR Codes Section */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -444,11 +528,20 @@ const QRManagement: React.FC<QRManagementProps> = () => {
         </CardHeader>
         <CardContent>
           {loadingQRCodes ? (
-            <div className="space-y-3">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-16 bg-gray-100 rounded animate-pulse" />
-              ))}
-            </div>
+            <>
+              {/* Desktop Loading State */}
+              <div className="hidden md:block space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="h-16 bg-gray-100 rounded animate-pulse" />
+                ))}
+              </div>
+              {/* Mobile Loading State */}
+              <div className="md:hidden space-y-4">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="h-32 bg-gray-100 rounded animate-pulse" />
+                ))}
+              </div>
+            </>
           ) : qrCodes.length === 0 ? (
             <div className="text-center py-8">
               <QrCode className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -456,106 +549,243 @@ const QRManagement: React.FC<QRManagementProps> = () => {
               <p className="text-sm text-gray-400">Create your first QR code to get started</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Event</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Expires</TableHead>
-                  <TableHead>Usage</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Desktop Table View */}
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Event</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Expires</TableHead>
+                      <TableHead>Usage</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {qrCodes.map((qrCode: QRCodeType) => (
+                      <TableRow key={qrCode.id}>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{qrCode.eventTitle}</div>
+                            <div className="text-sm text-gray-500">ID: {qrCode.eventId}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {getStatusBadge(qrCode)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 text-gray-400" />
+                            <span className="text-sm">{formatExpirationTime(qrCode.expiresAt)}</span>
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {new Date(qrCode.expiresAt).toLocaleDateString()}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Users className="h-3 w-3 text-gray-400" />
+                            <span className="text-sm">
+                              {qrCode.usageCount}
+                              {qrCode.maxUsage ? `/${qrCode.maxUsage}` : ''}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3 text-gray-400" />
+                            <span className="text-sm">
+                              {new Date(qrCode.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => viewQRCode(qrCode)}
+                              title="View QR Code"
+                            >
+                              <Eye className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => downloadQRCode(qrCode)}
+                              title="Download QR Code"
+                            >
+                              <Download className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(qrCode.accessUrl, '_blank')}
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => editQRCode(qrCode)}
+                              title="Edit QR Code"
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => 
+                                toggleQRCodeMutation.mutate({
+                                  qrCodeId: qrCode.id,
+                                  isActive: !qrCode.isActive
+                                })
+                              }
+                            >
+                              {qrCode.isActive ? 'Deactivate' : 'Activate'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => deleteQRCodeMutation.mutate(qrCode.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Mobile Card View */}
+              <div className="md:hidden space-y-4">
                 {qrCodes.map((qrCode: QRCodeType) => (
-                  <TableRow key={qrCode.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{qrCode.eventTitle}</div>
-                        <div className="text-sm text-gray-500">ID: {qrCode.eventId}</div>
+                  <Card key={qrCode.id} className="border border-gray-200">
+                    <CardContent className="p-4">
+                      <div className="space-y-3">
+                        {/* Header */}
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <h3 className="font-medium text-sm mb-1">{qrCode.eventTitle}</h3>
+                            <p className="text-xs text-gray-500">ID: {qrCode.eventId}</p>
+                          </div>
+                          <div className="ml-2">
+                            {getStatusBadge(qrCode)}
+                          </div>
+                        </div>
+
+                        {/* Info Grid */}
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <div className="flex items-center gap-1 text-gray-500 mb-1">
+                              <Clock className="h-3 w-3" />
+                              <span className="text-xs">Expires</span>
+                            </div>
+                            <div className="text-xs font-medium">{formatExpirationTime(qrCode.expiresAt)}</div>
+                            <div className="text-xs text-gray-500">
+                              {new Date(qrCode.expiresAt).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1 text-gray-500 mb-1">
+                              <Users className="h-3 w-3" />
+                              <span className="text-xs">Usage</span>
+                            </div>
+                            <div className="text-xs font-medium">
+                              {qrCode.usageCount}
+                              {qrCode.maxUsage ? `/${qrCode.maxUsage}` : ''}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center gap-1 text-gray-500 mb-1">
+                            <Calendar className="h-3 w-3" />
+                            <span className="text-xs">Created</span>
+                          </div>
+                          <div className="text-xs font-medium">
+                            {new Date(qrCode.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="border-t pt-3">
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => viewQRCode(qrCode)}
+                              className="text-xs"
+                            >
+                              <Eye className="h-3 w-3 mr-1" />
+                              View
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => downloadQRCode(qrCode)}
+                              className="text-xs"
+                            >
+                              <Download className="h-3 w-3 mr-1" />
+                              Download
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(qrCode.accessUrl, '_blank')}
+                              className="text-xs"
+                            >
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              Open
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => editQRCode(qrCode)}
+                              className="text-xs"
+                            >
+                              <Edit className="h-3 w-3 mr-1" />
+                              Edit
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => 
+                                toggleQRCodeMutation.mutate({
+                                  qrCodeId: qrCode.id,
+                                  isActive: !qrCode.isActive
+                                })
+                              }
+                              className="text-xs"
+                            >
+                              {qrCode.isActive ? 'Deactivate' : 'Activate'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => deleteQRCodeMutation.mutate(qrCode.id)}
+                              className="text-xs text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-3 w-3 mr-1" />
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      {getStatusBadge(qrCode)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-3 w-3 text-gray-400" />
-                        <span className="text-sm">{formatExpirationTime(qrCode.expiresAt)}</span>
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {new Date(qrCode.expiresAt).toLocaleDateString()}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Users className="h-3 w-3 text-gray-400" />
-                        <span className="text-sm">
-                          {qrCode.usageCount}
-                          {qrCode.maxUsage ? `/${qrCode.maxUsage}` : ''}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3 text-gray-400" />
-                        <span className="text-sm">
-                          {new Date(qrCode.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => viewQRCode(qrCode)}
-                          title="View QR Code"
-                        >
-                          <Eye className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => downloadQRCode(qrCode)}
-                          title="Download QR Code"
-                        >
-                          <Download className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => window.open(qrCode.accessUrl, '_blank')}
-                        >
-                          <ExternalLink className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => 
-                            toggleQRCodeMutation.mutate({
-                              qrCodeId: qrCode.id,
-                              isActive: !qrCode.isActive
-                            })
-                          }
-                        >
-                          {qrCode.isActive ? 'Deactivate' : 'Activate'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => deleteQRCodeMutation.mutate(qrCode.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                    </CardContent>
+                  </Card>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -637,6 +867,141 @@ const QRManagement: React.FC<QRManagementProps> = () => {
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
                   Copy URL
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit QR Code Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={(open) => {
+        setEditDialogOpen(open);
+        if (!open) {
+          setEditingQRCode(null);
+          resetEditForm();
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5" />
+              Edit QR Code: {editingQRCode?.eventTitle}
+            </DialogTitle>
+            <DialogDescription>
+              Update expiration time and usage limits for this QR code
+            </DialogDescription>
+          </DialogHeader>
+          
+          {editingQRCode && (
+            <div className="space-y-4">
+              {/* Current Status */}
+              <div className="p-3 bg-gray-50 rounded-lg space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="font-medium">Current Status:</span>
+                  {getStatusBadge(editingQRCode)}
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Current Expires:</span>
+                  <span>{formatExpirationTime(editingQRCode.expiresAt)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Current Usage:</span>
+                  <span>
+                    {editingQRCode.usageCount}
+                    {editingQRCode.maxUsage ? `/${editingQRCode.maxUsage}` : ' (No limit)'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Expiration Settings */}
+              <div>
+                <Label className="text-sm font-medium">Expiration Settings</Label>
+                <div className="mt-2 space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="noExpiration"
+                      checked={noExpiration}
+                      onCheckedChange={(checked) => setNoExpiration(checked as boolean)}
+                    />
+                    <Label htmlFor="noExpiration" className="text-sm">
+                      Set no expiration limit (10 years)
+                    </Label>
+                  </div>
+                  
+                  {!noExpiration && (
+                    <div>
+                      <Label htmlFor="extendHours" className="text-sm">Extend expiration by hours</Label>
+                      <Select value={extendHours} onValueChange={setExtendHours}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">1 Hour</SelectItem>
+                          <SelectItem value="6">6 Hours</SelectItem>
+                          <SelectItem value="12">12 Hours</SelectItem>
+                          <SelectItem value="24">24 Hours (1 Day)</SelectItem>
+                          <SelectItem value="48">48 Hours (2 Days)</SelectItem>
+                          <SelectItem value="72">72 Hours (3 Days)</SelectItem>
+                          <SelectItem value="168">1 Week</SelectItem>
+                          <SelectItem value="720">1 Month</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Usage Limit Settings */}
+              <div>
+                <Label className="text-sm font-medium">Usage Limit Settings</Label>
+                <div className="mt-2 space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="noUsageLimit"
+                      checked={noUsageLimit}
+                      onCheckedChange={(checked) => setNoUsageLimit(checked as boolean)}
+                    />
+                    <Label htmlFor="noUsageLimit" className="text-sm">
+                      Remove usage limit (unlimited uses)
+                    </Label>
+                  </div>
+                  
+                  {!noUsageLimit && (
+                    <div>
+                      <Label htmlFor="newMaxUsage" className="text-sm">Set new usage limit</Label>
+                      <Input
+                        id="newMaxUsage"
+                        type="number"
+                        placeholder="Enter new limit"
+                        value={newMaxUsage}
+                        onChange={(e) => setNewMaxUsage(e.target.value)}
+                        min="1"
+                        className="mt-1"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Current usage: {editingQRCode.usageCount}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setEditDialogOpen(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleEditQRCode}
+                  disabled={editQRCodeMutation.isPending}
+                  className="flex-1"
+                >
+                  {editQRCodeMutation.isPending ? 'Updating...' : 'Update QR Code'}
                 </Button>
               </div>
             </div>

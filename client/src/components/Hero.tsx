@@ -41,16 +41,15 @@ const Hero = () => {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-            <Link to="/findmyface">
+            <Link to="/events">
               <Button className="bg-gradient-to-r from-pink-500 to-orange-500 hover:from-pink-600 hover:to-orange-600 text-white px-8 py-3 text-lg rounded-full shadow-lg hover:shadow-xl transition-all">
                 <Search className="mr-2 h-5 w-5" />
                 Find My Photos
               </Button>
             </Link>
-            <Link to="/events">
+            <Link to="/findmyface">
               <Button variant="outline" className="border-2 border-white/60 text-white hover:bg-transparent hover:border-white/80 bg-transparent px-8 py-3 text-lg rounded-full">
-                <Calendar className="mr-2 h-5 w-5" />
-                View Events
+                How It Works
               </Button>
             </Link>
           </div>

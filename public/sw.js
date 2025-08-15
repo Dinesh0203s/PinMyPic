@@ -1,205 +1,128 @@
-// Service Worker for offline functionality and caching
-const CACHE_NAME = 'pinmypic-v1.2.0';
-const STATIC_CACHE_NAME = 'pinmypic-static-v1.2.0';
-const IMAGE_CACHE_NAME = 'pinmypic-images-v1.2.0';
+// Service Worker for PinMyPic - Production Caching and Offline Support
 
-// Files to cache immediately
-const STATIC_ASSETS = [
+const CACHE_NAME = 'pinmypic-v1.0.0';
+const API_CACHE_NAME = 'pinmypic-api-v1.0.0';
+
+// Resources to cache immediately
+const STATIC_CACHE_URLS = [
   '/',
-  '/index.html',
   '/manifest.json',
-  // Add other critical static assets
+  // Add other critical static resources
 ];
 
-// Image cache strategy
-const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg'];
+// API endpoints to cache
+const API_CACHE_PATTERNS = [
+  /^\/api\/events$/,
+  /^\/api\/packages$/,
+  /^\/api\/user\/profile$/,
+];
 
-// Install event - cache static assets
-self.addEventListener('install', (event) => {
+self.addEventListener('install', event => {
+  console.log('[ServiceWorker] Install');
+  
   event.waitUntil(
-    caches.open(STATIC_CACHE_NAME)
-      .then(cache => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
-  );
-});
-
-// Activate event - clean up old caches
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys()
-      .then(cacheNames => {
-        return Promise.all(
-          cacheNames.map(cacheName => {
-            if (cacheName !== CACHE_NAME && 
-                cacheName !== STATIC_CACHE_NAME && 
-                cacheName !== IMAGE_CACHE_NAME) {
-              return caches.delete(cacheName);
-            }
-          })
-        );
+    caches.open(CACHE_NAME)
+      .then(cache => {
+        console.log('[ServiceWorker] Caching app shell');
+        return cache.addAll(STATIC_CACHE_URLS);
       })
-      .then(() => self.clients.claim())
+      .then(() => {
+        return self.skipWaiting();
+      })
   );
 });
 
-// Fetch event - network first for API, cache first for assets
-self.addEventListener('fetch', (event) => {
+self.addEventListener('activate', event => {
+  console.log('[ServiceWorker] Activate');
+  
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (cacheName !== CACHE_NAME && cacheName !== API_CACHE_NAME) {
+            console.log('[ServiceWorker] Removing old cache', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => {
+      return self.clients.claim();
+    })
+  );
+});
+
+self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
-
-  // Skip cross-origin requests
-  if (url.origin !== self.location.origin) {
-    return;
-  }
-
-  // API requests - network first with cache fallback
+  
+  // Handle API requests
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(networkFirstStrategy(request));
+    event.respondWith(handleAPIRequest(request));
     return;
   }
-
-  // Image requests - cache first with network fallback
-  if (isImageRequest(request)) {
-    event.respondWith(cacheFirstStrategy(request, IMAGE_CACHE_NAME));
-    return;
-  }
-
-  // Static assets - cache first
-  event.respondWith(cacheFirstStrategy(request, STATIC_CACHE_NAME));
+  
+  // Handle static resources
+  event.respondWith(
+    caches.match(request)
+      .then(response => {
+        if (response) {
+          return response;
+        }
+        
+        return fetch(request).then(response => {
+          // Don't cache non-successful responses
+          if (!response || response.status !== 200 || response.type !== 'basic') {
+            return response;
+          }
+          
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME)
+            .then(cache => {
+              cache.put(request, responseClone);
+            });
+          
+          return response;
+        });
+      }).catch(() => {
+        // Return offline page if available
+        if (request.destination === 'document') {
+          return caches.match('/offline.html');
+        }
+      })
+  );
 });
 
-// Network first strategy (for API calls)
-async function networkFirstStrategy(request) {
+async function handleAPIRequest(request) {
+  const url = new URL(request.url);
+  const shouldCache = API_CACHE_PATTERNS.some(pattern => pattern.test(url.pathname));
+  
+  if (!shouldCache) {
+    return fetch(request);
+  }
+  
   try {
-    const networkResponse = await fetch(request);
+    const response = await fetch(request);
     
-    // Cache successful API responses (except POST/PUT/DELETE)
-    if (networkResponse.ok && request.method === 'GET') {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, networkResponse.clone());
+    if (response.status === 200) {
+      const cache = await caches.open(API_CACHE_NAME);
+      cache.put(request, response.clone());
     }
     
-    return networkResponse;
+    return response;
   } catch (error) {
-    // Try cache on network failure
+    // Return cached version if available
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
       return cachedResponse;
-    }
-    
-    // Return offline response for failed requests
-    return new Response(
-      JSON.stringify({ 
-        error: 'Offline', 
-        message: 'This feature is not available offline' 
-      }),
-      {
-        status: 503,
-        statusText: 'Service Unavailable',
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
-  }
-}
-
-// Cache first strategy (for static assets and images)
-async function cacheFirstStrategy(request, cacheName) {
-  const cachedResponse = await caches.match(request);
-  
-  if (cachedResponse) {
-    return cachedResponse;
-  }
-
-  try {
-    const networkResponse = await fetch(request);
-    
-    if (networkResponse.ok) {
-      const cache = await caches.open(cacheName);
-      cache.put(request, networkResponse.clone());
-    }
-    
-    return networkResponse;
-  } catch (error) {
-    // Return fallback for failed image requests
-    if (isImageRequest(request)) {
-      return new Response(
-        '<svg width="300" height="200" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="50%" text-anchor="middle" fill="#9ca3af">Image unavailable</text></svg>',
-        {
-          headers: { 'Content-Type': 'image/svg+xml' }
-        }
-      );
     }
     
     throw error;
   }
 }
 
-function isImageRequest(request) {
-  return IMAGE_EXTENSIONS.some(ext => request.url.includes(ext)) ||
-         request.destination === 'image' ||
-         request.url.includes('/api/images/');
-}
-
-// Background sync for photo uploads
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'photo-upload') {
-    event.waitUntil(syncPhotoUploads());
-  }
-});
-
-async function syncPhotoUploads() {
-  // Implementation for syncing failed photo uploads
-  // This would require storing failed uploads in IndexedDB
-  console.log('Syncing photo uploads...');
-}
-
-// Push notifications (for future use)
-self.addEventListener('push', (event) => {
-  const options = {
-    body: event.data ? event.data.text() : 'New photos available!',
-    icon: '/icon-192x192.png',
-    badge: '/badge-72x72.png',
-    tag: 'pinmypic-notification',
-    data: {
-      url: '/'
-    }
-  };
-
-  event.waitUntil(
-    self.registration.showNotification('PinMyPic', options)
-  );
-});
-
-// Handle notification clicks
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-
-  event.waitUntil(
-    clients.openWindow(event.notification.data.url || '/')
-  );
-});
-
-// Cache size management
-async function manageCacheSize() {
-  const cache = await caches.open(IMAGE_CACHE_NAME);
-  const requests = await cache.keys();
-  
-  // Limit image cache to 100 items
-  if (requests.length > 100) {
-    const requestsToDelete = requests.slice(0, requests.length - 100);
-    await Promise.all(
-      requestsToDelete.map(request => cache.delete(request))
-    );
-  }
-}
-
-// Periodic cache management
-self.addEventListener('message', (event) => {
+// Handle skip waiting message
+self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
-  }
-  
-  if (event.data && event.data.type === 'MANAGE_CACHE') {
-    event.waitUntil(manageCacheSize());
   }
 });

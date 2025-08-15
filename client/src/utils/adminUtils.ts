@@ -35,11 +35,11 @@ export const getAdminRoleDisplayName = (adminRole?: string): string => {
 export const getAdminPermissions = (adminRole?: string): string[] => {
   switch (adminRole) {
     case 'owner':
-      return ['events', 'bookings', 'packages', 'photos', 'contacts', 'users', 'users_manage', 'qr_codes', 'storage'];
+      return ['events', 'bookings', 'packages', 'photos', 'contacts', 'users', 'users_manage', 'qr_codes', 'storage', 'camera'];
     case 'admin':
-      return ['events', 'bookings', 'packages', 'photos', 'contacts', 'users_view', 'qr_codes', 'storage'];
+      return ['events', 'bookings', 'packages', 'photos', 'contacts', 'users_view', 'qr_codes', 'storage', 'camera'];
     case 'moderator':
-      return ['events', 'bookings', 'photos', 'contacts'];
+      return ['events', 'bookings', 'photos', 'contacts', 'camera'];
     case 'qr_share':
       return ['events_view', 'qr_codes'];
     default:
@@ -74,6 +74,8 @@ export const getAvailableTabs = (user: User | null): { value: string; label: str
     { value: 'messages', label: 'Messages', permission: 'contacts' },
     { value: 'users', label: 'Users', permission: 'users' },
     { value: 'qr', label: 'QR Codes', permission: 'qr_codes' },
+
+
     { value: 'storage', label: 'Storage', permission: 'storage' },
   ];
 

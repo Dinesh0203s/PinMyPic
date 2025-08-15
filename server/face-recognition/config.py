@@ -24,7 +24,7 @@ def detect_gpu_availability():
     has_gpu_onnx = False
     gpu_info = {}
 
-    # Check for CUDA availability
+    # Check for CUDA availability (optional dependency)
     try:
         import torch
         has_cuda = torch.cuda.is_available()
@@ -34,9 +34,12 @@ def detect_gpu_availability():
             gpu_info['cuda_memory'] = torch.cuda.get_device_properties(
                 0).total_memory
     except ImportError:
-        logger.info("PyTorch not available for CUDA detection")
+        # PyTorch is optional, continue without GPU acceleration
+        logger.info("PyTorch not available for CUDA detection - using CPU only")
+        has_cuda = False
     except Exception as e:
         logger.warning(f"CUDA detection failed: {e}")
+        has_cuda = False
 
     # Check for ONNX GPU providers
     try:

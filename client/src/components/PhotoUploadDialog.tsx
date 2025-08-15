@@ -1,10 +1,10 @@
-import { useState, useRef, useMemo, useCallback } from 'react';
+import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Upload, Camera, X, FileImage, AlertCircle, CheckCircle } from 'lucide-react';
+import { Upload, Camera, X, FileImage, AlertCircle, CheckCircle, Smartphone, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { UploadOptimizer, MemoryMonitor } from '@/utils/uploadOptimizer';
 
@@ -36,12 +36,156 @@ export function PhotoUploadDialog({
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [wakeLock, setWakeLock] = useState<WakeLockSentinel | null>(null);
+  const [hasWakeLockSupport, setHasWakeLockSupport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   // Use controlled props if provided, otherwise use internal state
   const isOpen = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setIsOpen = controlledOnOpenChange || setInternalOpen;
+
+  // Storage key for persisting upload state
+  const STORAGE_KEY = `upload_state_${eventId}`;
+
+  // Check for wake lock support on mount
+  useEffect(() => {
+    setHasWakeLockSupport('wakeLock' in navigator);
+  }, []);
+
+  // Load persisted upload state on mount
+  useEffect(() => {
+    const loadPersistedState = () => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const { files, uploading } = JSON.parse(saved);
+          if (files && files.length > 0) {
+            setUploadFiles(files);
+            if (uploading) {
+              toast({
+                title: "Upload resumed",
+                description: `Found ${files.length} photos from previous session. Continue uploading?`,
+                action: (
+                  <Button 
+                    size="sm" 
+                    onClick={() => {
+                      // Reset pending files and restart upload
+                      const pendingFiles = files.map((f: UploadFile) => 
+                        f.status === 'uploading' ? { ...f, status: 'pending' } : f
+                      );
+                      setUploadFiles(pendingFiles);
+                      handleUploadAll();
+                    }}
+                  >
+                    Resume
+                  </Button>
+                )
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load persisted upload state:', error);
+      }
+    };
+
+    if (eventId && isOpen) {
+      loadPersistedState();
+    }
+  }, [eventId, isOpen]);
+
+  // Save upload state to localStorage
+  const saveUploadState = useCallback((files: UploadFile[], uploading: boolean) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        files: files.map(f => ({
+          ...f,
+          file: null // Don't persist the actual file object
+        })),
+        uploading,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      console.error('Failed to save upload state:', error);
+    }
+  }, [STORAGE_KEY]);
+
+  // Clear persisted state
+  const clearPersistedState = useCallback(() => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+      console.error('Failed to clear persisted state:', error);
+    }
+  }, [STORAGE_KEY]);
+
+  // Request wake lock to prevent screen from turning off during upload
+  const requestWakeLock = async () => {
+    if (!hasWakeLockSupport) return;
+    
+    try {
+      const wakeLock = await navigator.wakeLock.request('screen');
+      setWakeLock(wakeLock);
+      
+      wakeLock.addEventListener('release', () => {
+        console.log('Wake lock was released');
+      });
+      
+      toast({
+        title: "Screen lock prevented",
+        description: "Your screen will stay on during upload to prevent interruptions."
+      });
+    } catch (error) {
+      console.error('Wake lock request failed:', error);
+    }
+  };
+
+  // Release wake lock
+  const releaseWakeLock = async () => {
+    if (wakeLock) {
+      try {
+        await wakeLock.release();
+        setWakeLock(null);
+      } catch (error) {
+        console.error('Wake lock release failed:', error);
+      }
+    }
+  };
+
+  // Handle page visibility changes (when user switches tabs or minimizes browser)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && isUploading) {
+        saveUploadState(uploadFiles, isUploading);
+      }
+    };
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isUploading) {
+        saveUploadState(uploadFiles, isUploading);
+        e.preventDefault();
+        e.returnValue = 'Upload in progress. Are you sure you want to leave?';
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isUploading, uploadFiles, saveUploadState]);
+
+  // Update uploadFiles state and persist
+  const updateUploadFiles = useCallback((updater: (prev: UploadFile[]) => UploadFile[]) => {
+    setUploadFiles(prev => {
+      const newFiles = updater(prev);
+      saveUploadState(newFiles, isUploading);
+      return newFiles;
+    });
+  }, [isUploading, saveUploadState]);
 
 
 
@@ -107,7 +251,7 @@ export function PhotoUploadDialog({
       status: 'pending'
     }));
 
-    setUploadFiles(prev => [...prev, ...newUploadFiles]);
+    updateUploadFiles(prev => [...prev, ...newUploadFiles]);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -134,7 +278,7 @@ export function PhotoUploadDialog({
   };
 
   const removeFile = (id: string) => {
-    setUploadFiles(prev => prev.filter(f => f.id !== id));
+    updateUploadFiles(prev => prev.filter(f => f.id !== id));
   };
 
   const uploadPhoto = async (uploadFile: UploadFile): Promise<void> => {
@@ -145,7 +289,7 @@ export function PhotoUploadDialog({
       }
 
       // Update status to uploading
-      setUploadFiles(prev => prev.map(f => 
+      updateUploadFiles(prev => prev.map(f => 
         f.id === uploadFile.id ? { ...f, status: 'uploading' as const, progress: 0 } : f
       ));
 
@@ -162,7 +306,7 @@ export function PhotoUploadDialog({
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
             const progress = Math.round((e.loaded / e.total) * 100);
-            setUploadFiles(prev => prev.map(f => 
+            updateUploadFiles(prev => prev.map(f => 
               f.id === uploadFile.id ? { ...f, progress } : f
             ));
           }
@@ -172,7 +316,7 @@ export function PhotoUploadDialog({
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
               const result = JSON.parse(xhr.responseText);
-              setUploadFiles(prev => prev.map(f => 
+              updateUploadFiles(prev => prev.map(f => 
                 f.id === uploadFile.id ? { 
                   ...f, 
                   status: 'completed' as const, 
@@ -204,7 +348,7 @@ export function PhotoUploadDialog({
 
     } catch (error) {
       console.error('Upload error:', error);
-      setUploadFiles(prev => prev.map(f => 
+      updateUploadFiles(prev => prev.map(f => 
         f.id === uploadFile.id ? { 
           ...f, 
           status: 'error' as const, 
@@ -218,6 +362,11 @@ export function PhotoUploadDialog({
     if (uploadFiles.length === 0) return;
 
     setIsUploading(true);
+    
+    // Request wake lock on mobile to prevent screen from turning off
+    if (hasWakeLockSupport) {
+      await requestWakeLock();
+    }
     
     try {
       const pendingFiles = uploadFiles.filter(f => f.status === 'pending');
@@ -308,12 +457,22 @@ export function PhotoUploadDialog({
       });
     } finally {
       setIsUploading(false);
+      
+      // Release wake lock when upload is complete
+      await releaseWakeLock();
+      
+      // Clear persisted state on successful completion
+      const allCompleted = uploadFiles.every(f => f.status === 'completed');
+      if (allCompleted) {
+        clearPersistedState();
+      }
     }
   };
 
   const handleClose = () => {
     if (!isUploading) {
-      setUploadFiles([]);
+      updateUploadFiles(() => []);
+      clearPersistedState();
       setIsOpen(false);
     }
   };
@@ -398,6 +557,19 @@ export function PhotoUploadDialog({
                 Support for JPG, PNG, WebP files<br />
                 Maximum 200 photos per upload (optimized for large batches)
               </p>
+              
+              {/* Mobile Upload Protection Notice */}
+              {hasWakeLockSupport && (
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-2 text-blue-800">
+                    <Smartphone className="h-4 w-4" />
+                    <span className="text-sm font-medium">Mobile Upload Protection</span>
+                  </div>
+                  <p className="text-xs text-blue-700 mt-1">
+                    Your uploads will be protected from interruptions and can auto-resume if the screen locks
+                  </p>
+                </div>
+              )}
               <Button className="mt-4" variant="outline">
                 <FileImage className="h-4 w-4 mr-2" />
                 Select Photos
@@ -435,7 +607,7 @@ export function PhotoUploadDialog({
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => setUploadFiles([])}
+                    onClick={() => updateUploadFiles(() => [])}
                     disabled={isUploading}
                   >
                     Clear All
@@ -459,6 +631,16 @@ export function PhotoUploadDialog({
                     <span>{uploadStats.errors} failed</span>
                     <span>{uploadStats.pending} pending</span>
                   </div>
+                  
+                  {/* Mobile Upload Status */}
+                  {isUploading && wakeLock && (
+                    <div className="flex items-center gap-2 mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                      <Shield className="h-4 w-4 text-green-600" />
+                      <span className="text-xs text-green-700 font-medium">
+                        Screen lock prevented - Upload protected from interruptions
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 

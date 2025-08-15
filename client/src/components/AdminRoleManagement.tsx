@@ -333,53 +333,135 @@ const AdminRoleManagement: React.FC<AdminRoleManagementProps> = ({ currentUser, 
             <Badge variant="secondary">{adminUsers.length} admins</Badge>
           </div>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead 
-                  className="cursor-pointer hover:bg-gray-50 select-none"
-                  onClick={() => handleSort('name')}
-                >
-                  <div className="flex items-center gap-2">
-                    User
-                    {sortField === 'name' && (
-                      sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                    )}
-                  </div>
-                </TableHead>
-                <TableHead 
-                  className="cursor-pointer hover:bg-gray-50 select-none"
-                  onClick={() => handleSort('role')}
-                >
-                  <div className="flex items-center gap-2">
-                    Role
-                    {sortField === 'role' && (
-                      sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                    )}
-                  </div>
-                </TableHead>
-                <TableHead>Permissions</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredAdminUsers.map((user, index) => (
-                <TableRow key={`admin-${user.id || user.firebaseUid}-${index}`}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
+        <CardContent className="p-4">
+          {/* Desktop Table */}
+          <div className="hidden lg:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-gray-50 select-none"
+                    onClick={() => handleSort('name')}
+                  >
+                    <div className="flex items-center gap-2">
+                      User
+                      {sortField === 'name' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-gray-50 select-none"
+                    onClick={() => handleSort('role')}
+                  >
+                    <div className="flex items-center gap-2">
+                      Role
+                      {sortField === 'role' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead>Permissions</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredAdminUsers.map((user, index) => (
+                  <TableRow key={`admin-${user.id || user.firebaseUid}-${index}`}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={user.photoURL || user.customPhotoURL}
+                          alt={user.displayName}
+                          className="w-8 h-8 rounded-full"
+                        />
+                        <div>
+                          <div className="font-medium">{user.displayName}</div>
+                          <div className="text-sm text-gray-500">{user.email}</div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={
+                        user.adminRole === 'owner' ? 'bg-yellow-50 border-yellow-200 text-yellow-700' :
+                        user.adminRole === 'admin' ? 'bg-blue-50 border-blue-200 text-blue-700' :
+                        user.adminRole === 'moderator' ? 'bg-green-50 border-green-200 text-green-700' :
+                        user.adminRole === 'qr_share' ? 'bg-purple-50 border-purple-200 text-purple-700' :
+                        'bg-gray-50 border-gray-200 text-gray-700'
+                      }>
+                        {user.adminRole === 'owner' && '👑 Owner'}
+                        {user.adminRole === 'admin' && '🛡️ Admin'}
+                        {user.adminRole === 'moderator' && '⚡ Moderator'}
+                        {user.adminRole === 'qr_share' && '📱 QR Share'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1 max-w-xs">
+                        {(user.adminPermissions || getAdminPermissions(user.adminRole)).slice(0, 3).map((permission, permIndex) => (
+                          <Badge key={`${user.id || user.firebaseUid}-${permission}-${permIndex}`} variant="secondary" className="text-xs">
+                            {permission}
+                          </Badge>
+                        ))}
+                        {(user.adminPermissions || getAdminPermissions(user.adminRole)).length > 3 && (
+                          <Badge variant="secondary" className="text-xs">
+                            +{(user.adminPermissions || getAdminPermissions(user.adminRole)).length - 3} more
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        {user.adminRole !== 'owner' && isOwner && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setCustomPermissions(user.adminPermissions || getAdminPermissions(user.adminRole));
+                                setEditDialogOpen(true);
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700"
+                              onClick={() => handleDemoteUser(user.id || user.firebaseUid)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                        {user.adminRole === 'owner' && (
+                          <Crown className="h-4 w-4 text-yellow-600" />
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Mobile Cards */}
+          <div className="grid grid-cols-1 gap-4 lg:hidden">
+            {filteredAdminUsers.map((user, index) => (
+              <Card key={`admin-card-${user.id || user.firebaseUid}-${index}`} className="border border-gray-200 hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
                       <img
                         src={user.photoURL || user.customPhotoURL}
                         alt={user.displayName}
-                        className="w-8 h-8 rounded-full"
+                        className="w-10 h-10 rounded-full flex-shrink-0"
                       />
-                      <div>
-                        <div className="font-medium">{user.displayName}</div>
-                        <div className="text-sm text-gray-500">{user.email}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-sm truncate">{user.displayName}</div>
+                        <div className="text-xs text-gray-500 truncate">{user.email}</div>
                       </div>
                     </div>
-                  </TableCell>
-                  <TableCell>
                     <Badge variant="outline" className={
                       user.adminRole === 'owner' ? 'bg-yellow-50 border-yellow-200 text-yellow-700' :
                       user.adminRole === 'admin' ? 'bg-blue-50 border-blue-200 text-blue-700' :
@@ -392,55 +474,61 @@ const AdminRoleManagement: React.FC<AdminRoleManagementProps> = ({ currentUser, 
                       {user.adminRole === 'moderator' && '⚡ Moderator'}
                       {user.adminRole === 'qr_share' && '📱 QR Share'}
                     </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1 max-w-xs">
-                      {(user.adminPermissions || getAdminPermissions(user.adminRole)).slice(0, 3).map((permission, permIndex) => (
+                  </div>
+                  
+                  <div className="mb-3">
+                    <div className="text-xs text-gray-600 mb-2">Permissions:</div>
+                    <div className="flex flex-wrap gap-1">
+                      {(user.adminPermissions || getAdminPermissions(user.adminRole)).slice(0, 4).map((permission, permIndex) => (
                         <Badge key={`${user.id || user.firebaseUid}-${permission}-${permIndex}`} variant="secondary" className="text-xs">
                           {permission}
                         </Badge>
                       ))}
-                      {(user.adminPermissions || getAdminPermissions(user.adminRole)).length > 3 && (
+                      {(user.adminPermissions || getAdminPermissions(user.adminRole)).length > 4 && (
                         <Badge variant="secondary" className="text-xs">
-                          +{(user.adminPermissions || getAdminPermissions(user.adminRole)).length - 3} more
+                          +{(user.adminPermissions || getAdminPermissions(user.adminRole)).length - 4} more
                         </Badge>
                       )}
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      {user.adminRole !== 'owner' && isOwner && (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedUser(user);
-                              setCustomPermissions(user.adminPermissions || getAdminPermissions(user.adminRole));
-                              setEditDialogOpen(true);
-                            }}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700"
-                            onClick={() => handleDemoteUser(user.id || user.firebaseUid)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
-                      {user.adminRole === 'owner' && (
-                        <Crown className="h-4 w-4 text-yellow-600" />
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  </div>
+
+                  <div className="flex justify-end gap-2">
+                    {user.adminRole !== 'owner' && isOwner && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedUser(user);
+                            setCustomPermissions(user.adminPermissions || getAdminPermissions(user.adminRole));
+                            setEditDialogOpen(true);
+                          }}
+                        >
+                          <Edit className="h-4 w-4 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
+                          onClick={() => handleDemoteUser(user.id || user.firebaseUid)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Remove
+                        </Button>
+                      </>
+                    )}
+                    {user.adminRole === 'owner' && (
+                      <div className="flex items-center text-yellow-600">
+                        <Crown className="h-4 w-4 mr-1" />
+                        <span className="text-xs">Owner</span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
@@ -455,7 +543,7 @@ const AdminRoleManagement: React.FC<AdminRoleManagementProps> = ({ currentUser, 
             <Badge variant="secondary">{regularUsers.length} users</Badge>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4">
           {/* Search for Regular Users */}
           <div className="mb-4">
             <div className="relative">
@@ -468,63 +556,115 @@ const AdminRoleManagement: React.FC<AdminRoleManagementProps> = ({ currentUser, 
               />
             </div>
           </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead 
-                  className="cursor-pointer hover:bg-gray-50 select-none"
-                  onClick={() => handleSort('name')}
-                >
-                  <div className="flex items-center gap-2">
-                    User
-                    {sortField === 'name' && (
-                      sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                    )}
-                  </div>
-                </TableHead>
-                <TableHead 
-                  className="cursor-pointer hover:bg-gray-50 select-none"
-                  onClick={() => handleSort('joined')}
-                >
-                  <div className="flex items-center gap-2">
-                    Joined
-                    {sortField === 'joined' && (
-                      sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                    )}
-                  </div>
-                </TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredRegularUsers.map((user, index) => (
-                <TableRow key={`regular-${user.id || user.firebaseUid}-${index}`}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
+
+          {/* Desktop Table */}
+          <div className="hidden lg:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-gray-50 select-none"
+                    onClick={() => handleSort('name')}
+                  >
+                    <div className="flex items-center gap-2">
+                      User
+                      {sortField === 'name' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-gray-50 select-none"
+                    onClick={() => handleSort('joined')}
+                  >
+                    <div className="flex items-center gap-2">
+                      Joined
+                      {sortField === 'joined' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredRegularUsers.map((user, index) => (
+                  <TableRow key={`regular-${user.id || user.firebaseUid}-${index}`}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={user.photoURL || user.customPhotoURL}
+                          alt={user.displayName}
+                          className="w-8 h-8 rounded-full"
+                        />
+                        <div>
+                          <div className="font-medium">{user.displayName}</div>
+                          <div className="text-sm text-gray-500">{user.email}</div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(user.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={user.isActive !== false ? "default" : "secondary"}>
+                        {user.isActive !== false ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedUser(user);
+                          setSelectedRole('admin');
+                          setCustomPermissions(getAdminPermissions('admin'));
+                          setPromoteDialogOpen(true);
+                        }}
+                      >
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Promote
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Mobile Cards */}
+          <div className="grid grid-cols-1 gap-4 lg:hidden">
+            {filteredRegularUsers.map((user, index) => (
+              <Card key={`regular-card-${user.id || user.firebaseUid}-${index}`} className="border border-gray-200 hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
                       <img
                         src={user.photoURL || user.customPhotoURL}
                         alt={user.displayName}
-                        className="w-8 h-8 rounded-full"
+                        className="w-10 h-10 rounded-full flex-shrink-0"
                       />
-                      <div>
-                        <div className="font-medium">{user.displayName}</div>
-                        <div className="text-sm text-gray-500">{user.email}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-sm truncate">{user.displayName}</div>
+                        <div className="text-xs text-gray-500 truncate">{user.email}</div>
                       </div>
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    {new Date(user.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={user.isActive !== false ? "default" : "secondary"}>
+                    <Badge variant={user.isActive !== false ? "default" : "secondary"} className="flex-shrink-0">
                       {user.isActive !== false ? "Active" : "Inactive"}
                     </Badge>
-                  </TableCell>
-                  <TableCell>
+                  </div>
+                  
+                  <div className="mb-3">
+                    <div className="text-xs text-gray-600 mb-1">Member since:</div>
+                    <div className="text-sm text-gray-800">{new Date(user.createdAt).toLocaleDateString()}</div>
+                  </div>
+
+                  <div className="flex justify-end">
                     <Button
                       variant="outline"
                       size="sm"
+                      className="w-full sm:w-auto"
                       onClick={() => {
                         setSelectedUser(user);
                         setSelectedRole('admin');
@@ -533,13 +673,13 @@ const AdminRoleManagement: React.FC<AdminRoleManagementProps> = ({ currentUser, 
                       }}
                     >
                       <UserPlus className="h-4 w-4 mr-2" />
-                      Promote
+                      Promote to Admin
                     </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </CardContent>
       </Card>
 

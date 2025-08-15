@@ -247,45 +247,191 @@ export function AdminUsersManagement({ currentUser }: AdminUsersManagementProps)
               placeholder="Search users..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
+              className="w-full sm:max-w-sm"
             />
           </div>
 
           <Tabs defaultValue="all-users" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="all-users">All Users ({users.length})</TabsTrigger>
-              <TabsTrigger value="admin-users">Admin Users ({adminUsers.length})</TabsTrigger>
+              <TabsTrigger value="all-users" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">All Users</span>
+                <span className="sm:hidden">All</span>
+                <span className="ml-1">({users.length})</span>
+              </TabsTrigger>
+              <TabsTrigger value="admin-users" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Admin Users</span>
+                <span className="sm:hidden">Admins</span>
+                <span className="ml-1">({adminUsers.length})</span>
+              </TabsTrigger>
             </TabsList>
             
             <TabsContent value="all-users" className="space-y-4">
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Joined</TableHead>
-                      {isOwner && <TableHead>Actions</TableHead>}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredUsers.map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-sm">
+              {/* Desktop Table View */}
+              <div className="hidden md:block">
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>User</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Joined</TableHead>
+                        {isOwner && <TableHead>Actions</TableHead>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredUsers.map((user) => (
+                        <TableRow key={user.id}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-sm">
+                                {user.displayName?.[0] || user.email[0].toUpperCase()}
+                              </div>
+                              <div>
+                                <div>{user.displayName || 'No Name'}</div>
+                                <div className="text-xs text-gray-500">{user.id}</div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>{user.email}</TableCell>
+                          <TableCell>
+                            {user.isAdmin ? (
+                              <Badge className={getRoleBadgeColor(user.adminRole)}>
+                                <Shield className="w-3 h-3 mr-1" />
+                                {user.adminRole || 'admin'}
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary">User</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {user.isActive !== false ? (
+                              <Badge variant="outline" className="text-green-600 border-green-600">
+                                <Activity className="w-3 h-3 mr-1" />
+                                Active
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-red-600 border-red-600">
+                                <UserX className="w-3 h-3 mr-1" />
+                                Inactive
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 text-sm text-gray-500">
+                              <Calendar className="w-3 h-3" />
+                              {new Date(user.createdAt).toLocaleDateString()}
+                            </div>
+                          </TableCell>
+                          {isOwner && (
+                            <TableCell>
+                              <div className="flex gap-2">
+                                {/* Show owner badge for owner account */}
+                                {user.email === 'dond2674@gmail.com' ? (
+                                  <Badge className="bg-purple-500 text-white">
+                                    <Crown className="w-3 h-3 mr-1" />
+                                    Owner (Protected)
+                                  </Badge>
+                                ) : (
+                                  <>
+                                    {!user.isAdmin && user.email !== currentUser.email && (
+                                      <Dialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
+                                        <DialogTrigger asChild>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setSelectedUser(user)}
+                                          >
+                                            <UserCheck className="w-4 h-4 mr-1" />
+                                            Promote
+                                          </Button>
+                                        </DialogTrigger>
+                                        <DialogContent className="mx-4 sm:mx-auto">
+                                          <DialogHeader>
+                                            <DialogTitle>Promote User</DialogTitle>
+                                            <DialogDescription>
+                                              {selectedUser ? `Select the admin role for ${selectedUser.email}` : 'Select the admin role for the user'}
+                                            </DialogDescription>
+                                          </DialogHeader>
+                                          <div className="space-y-4">
+                                            <div className="grid grid-cols-2 gap-4">
+                                              <Button
+                                                onClick={() => selectedUser && handlePromoteUser(selectedUser.id, 'admin')}
+                                                className="flex flex-col items-center gap-2 h-20"
+                                              >
+                                                <Shield className="w-6 h-6" />
+                                                <span>Admin</span>
+                                              </Button>
+                                              <Button
+                                                variant="outline"
+                                                onClick={() => selectedUser && handlePromoteUser(selectedUser.id, 'moderator')}
+                                                className="flex flex-col items-center gap-2 h-20"
+                                              >
+                                                <UserCheck className="w-6 h-6" />
+                                                <span>Moderator</span>
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        </DialogContent>
+                                      </Dialog>
+                                    )}
+                                    {user.isAdmin && user.adminRole !== 'owner' && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleDemoteUser(user.id)}
+                                        className="text-orange-600 border-orange-600 hover:bg-orange-50"
+                                      >
+                                        <UserX className="w-4 h-4 mr-1" />
+                                        Demote
+                                      </Button>
+                                    )}
+                                    {user.isActive !== false && user.email !== currentUser.email && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleDeactivateUser(user.id)}
+                                        className="text-red-600 border-red-600 hover:bg-red-50"
+                                      >
+                                        <UserX className="w-4 h-4 mr-1" />
+                                        Deactivate
+                                      </Button>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              {/* Mobile Card View */}
+              <div className="md:hidden space-y-4">
+                {filteredUsers.map((user) => (
+                  <Card key={user.id} className="border border-gray-200">
+                    <CardContent className="p-4">
+                      <div className="space-y-3">
+                        {/* Header */}
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3 flex-1">
+                            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-lg">
                               {user.displayName?.[0] || user.email[0].toUpperCase()}
                             </div>
-                            <div>
-                              <div>{user.displayName || 'No Name'}</div>
-                              <div className="text-xs text-gray-500">{user.id}</div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-medium text-sm truncate">{user.displayName || 'No Name'}</h3>
+                              <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                              <p className="text-xs text-gray-400">ID: {user.id.substring(0, 8)}...</p>
                             </div>
                           </div>
-                        </TableCell>
-                        <TableCell>{user.email}</TableCell>
-                        <TableCell>
+                        </div>
+
+                        {/* Status and Role */}
+                        <div className="flex gap-2 flex-wrap">
                           {user.isAdmin ? (
                             <Badge className={getRoleBadgeColor(user.adminRole)}>
                               <Shield className="w-3 h-3 mr-1" />
@@ -294,8 +440,6 @@ export function AdminUsersManagement({ currentUser }: AdminUsersManagementProps)
                           ) : (
                             <Badge variant="secondary">User</Badge>
                           )}
-                        </TableCell>
-                        <TableCell>
                           {user.isActive !== false ? (
                             <Badge variant="outline" className="text-green-600 border-green-600">
                               <Activity className="w-3 h-3 mr-1" />
@@ -307,73 +451,75 @@ export function AdminUsersManagement({ currentUser }: AdminUsersManagementProps)
                               Inactive
                             </Badge>
                           )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1 text-sm text-gray-500">
-                            <Calendar className="w-3 h-3" />
-                            {new Date(user.createdAt).toLocaleDateString()}
-                          </div>
-                        </TableCell>
+                        </div>
+
+                        {/* Join Date */}
+                        <div className="text-xs text-gray-500 flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          Joined {new Date(user.createdAt).toLocaleDateString()}
+                        </div>
+
+                        {/* Actions */}
                         {isOwner && (
-                          <TableCell>
-                            <div className="flex gap-2">
-                              {/* Show owner badge for owner account */}
-                              {user.email === 'dond2674@gmail.com' ? (
-                                <Badge className="bg-purple-500 text-white">
-                                  <Crown className="w-3 h-3 mr-1" />
-                                  Owner (Protected)
-                                </Badge>
-                              ) : (
-                                <>
-                                  {!user.isAdmin && user.email !== currentUser.email && (
-                                    <Dialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
-                                      <DialogTrigger asChild>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => setSelectedUser(user)}
-                                        >
-                                          <UserCheck className="w-4 h-4 mr-1" />
-                                          Promote
-                                        </Button>
-                                      </DialogTrigger>
-                                      <DialogContent>
-                                        <DialogHeader>
-                                          <DialogTitle>Promote User</DialogTitle>
-                                          <DialogDescription>
-                                            {selectedUser ? `Select the admin role for ${selectedUser.email}` : 'Select the admin role for the user'}
-                                          </DialogDescription>
-                                        </DialogHeader>
-                                        <div className="space-y-4">
-                                          <div className="grid grid-cols-2 gap-4">
-                                            <Button
-                                              onClick={() => selectedUser && handlePromoteUser(selectedUser.id, 'admin')}
-                                              className="flex flex-col items-center gap-2 h-20"
-                                            >
-                                              <Shield className="w-6 h-6" />
-                                              <span>Admin</span>
-                                            </Button>
-                                            <Button
-                                              variant="outline"
-                                              onClick={() => selectedUser && handlePromoteUser(selectedUser.id, 'moderator')}
-                                              className="flex flex-col items-center gap-2 h-20"
-                                            >
-                                              <UserCheck className="w-6 h-6" />
-                                              <span>Moderator</span>
-                                            </Button>
-                                          </div>
+                          <div className="border-t pt-3">
+                            {user.email === 'dond2674@gmail.com' ? (
+                              <Badge className="bg-purple-500 text-white w-full justify-center">
+                                <Crown className="w-3 h-3 mr-1" />
+                                Owner (Protected)
+                              </Badge>
+                            ) : (
+                              <div className="space-y-2">
+                                {!user.isAdmin && user.email !== currentUser.email && (
+                                  <Dialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
+                                    <DialogTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setSelectedUser(user)}
+                                        className="w-full text-xs"
+                                      >
+                                        <UserCheck className="w-3 h-3 mr-1" />
+                                        Promote to Admin
+                                      </Button>
+                                    </DialogTrigger>
+                                    <DialogContent className="mx-4 sm:mx-auto">
+                                      <DialogHeader>
+                                        <DialogTitle>Promote User</DialogTitle>
+                                        <DialogDescription>
+                                          {selectedUser ? `Select the admin role for ${selectedUser.email}` : 'Select the admin role for the user'}
+                                        </DialogDescription>
+                                      </DialogHeader>
+                                      <div className="space-y-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                          <Button
+                                            onClick={() => selectedUser && handlePromoteUser(selectedUser.id, 'admin')}
+                                            className="flex flex-col items-center gap-2 h-20"
+                                          >
+                                            <Shield className="w-6 h-6" />
+                                            <span>Admin</span>
+                                          </Button>
+                                          <Button
+                                            variant="outline"
+                                            onClick={() => selectedUser && handlePromoteUser(selectedUser.id, 'moderator')}
+                                            className="flex flex-col items-center gap-2 h-20"
+                                          >
+                                            <UserCheck className="w-6 h-6" />
+                                            <span>Moderator</span>
+                                          </Button>
                                         </div>
-                                      </DialogContent>
-                                    </Dialog>
-                                  )}
+                                      </div>
+                                    </DialogContent>
+                                  </Dialog>
+                                )}
+                                <div className="grid grid-cols-1 gap-2">
                                   {user.isAdmin && user.adminRole !== 'owner' && (
                                     <Button
                                       variant="outline"
                                       size="sm"
                                       onClick={() => handleDemoteUser(user.id)}
-                                      className="text-orange-600 border-orange-600 hover:bg-orange-50"
+                                      className="text-orange-600 border-orange-600 hover:bg-orange-50 text-xs"
                                     >
-                                      <UserX className="w-4 h-4 mr-1" />
+                                      <UserX className="w-3 h-3 mr-1" />
                                       Demote
                                     </Button>
                                   )}
@@ -382,59 +528,129 @@ export function AdminUsersManagement({ currentUser }: AdminUsersManagementProps)
                                       variant="outline"
                                       size="sm"
                                       onClick={() => handleDeactivateUser(user.id)}
-                                      className="text-red-600 border-red-600 hover:bg-red-50"
+                                      className="text-red-600 border-red-600 hover:bg-red-50 text-xs"
                                     >
-                                      <UserX className="w-4 h-4 mr-1" />
+                                      <UserX className="w-3 h-3 mr-1" />
                                       Deactivate
                                     </Button>
                                   )}
-                                </>
-                              )}
-                            </div>
-                          </TableCell>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         )}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             </TabsContent>
 
             <TabsContent value="admin-users" className="space-y-4">
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Permissions</TableHead>
-                      <TableHead>Since</TableHead>
-                      {isOwner && <TableHead>Actions</TableHead>}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredAdminUsers.map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-sm">
+              {/* Desktop Table View */}
+              <div className="hidden md:block">
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>User</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Permissions</TableHead>
+                        <TableHead>Since</TableHead>
+                        {isOwner && <TableHead>Actions</TableHead>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredAdminUsers.map((user) => (
+                        <TableRow key={user.id}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-sm">
+                                {user.displayName?.[0] || user.email[0].toUpperCase()}
+                              </div>
+                              <div>
+                                <div>{user.displayName || 'No Name'}</div>
+                                <div className="text-xs text-gray-500">{user.id}</div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>{user.email}</TableCell>
+                          <TableCell>
+                            <Badge className={getRoleBadgeColor(user.adminRole)}>
+                              <Shield className="w-3 h-3 mr-1" />
+                              {user.adminRole || 'admin'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {user.adminPermissions?.map((permission) => (
+                                <Badge key={permission} variant="secondary" className="text-xs">
+                                  {permission}
+                                </Badge>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 text-sm text-gray-500">
+                              <Calendar className="w-3 h-3" />
+                              {new Date(user.createdAt).toLocaleDateString()}
+                            </div>
+                          </TableCell>
+                          {isOwner && (
+                            <TableCell>
+                              <div className="flex gap-2">
+                                {user.adminRole !== 'owner' && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleDemoteUser(user.id)}
+                                    className="text-orange-600 border-orange-600 hover:bg-orange-50"
+                                  >
+                                    <UserX className="w-4 h-4 mr-1" />
+                                    Demote
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              {/* Mobile Card View */}
+              <div className="md:hidden space-y-4">
+                {filteredAdminUsers.map((user) => (
+                  <Card key={user.id} className="border border-gray-200">
+                    <CardContent className="p-4">
+                      <div className="space-y-3">
+                        {/* Header */}
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3 flex-1">
+                            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-lg">
                               {user.displayName?.[0] || user.email[0].toUpperCase()}
                             </div>
-                            <div>
-                              <div>{user.displayName || 'No Name'}</div>
-                              <div className="text-xs text-gray-500">{user.id}</div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-medium text-sm truncate">{user.displayName || 'No Name'}</h3>
+                              <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                              <p className="text-xs text-gray-400">ID: {user.id.substring(0, 8)}...</p>
                             </div>
                           </div>
-                        </TableCell>
-                        <TableCell>{user.email}</TableCell>
-                        <TableCell>
                           <Badge className={getRoleBadgeColor(user.adminRole)}>
                             <Shield className="w-3 h-3 mr-1" />
                             {user.adminRole || 'admin'}
                           </Badge>
-                        </TableCell>
-                        <TableCell>
+                        </div>
+
+                        {/* Permissions */}
+                        <div>
+                          <div className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                            <Shield className="w-3 h-3" />
+                            Permissions
+                          </div>
                           <div className="flex flex-wrap gap-1">
                             {user.adminPermissions?.map((permission) => (
                               <Badge key={permission} variant="secondary" className="text-xs">
@@ -442,34 +658,32 @@ export function AdminUsersManagement({ currentUser }: AdminUsersManagementProps)
                               </Badge>
                             ))}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1 text-sm text-gray-500">
-                            <Calendar className="w-3 h-3" />
-                            {new Date(user.createdAt).toLocaleDateString()}
+                        </div>
+
+                        {/* Admin Since */}
+                        <div className="text-xs text-gray-500 flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          Admin since {new Date(user.createdAt).toLocaleDateString()}
+                        </div>
+
+                        {/* Actions */}
+                        {isOwner && user.adminRole !== 'owner' && (
+                          <div className="border-t pt-3">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDemoteUser(user.id)}
+                              className="text-orange-600 border-orange-600 hover:bg-orange-50 w-full text-xs"
+                            >
+                              <UserX className="w-3 h-3 mr-1" />
+                              Demote from Admin
+                            </Button>
                           </div>
-                        </TableCell>
-                        {isOwner && (
-                          <TableCell>
-                            <div className="flex gap-2">
-                              {user.adminRole !== 'owner' && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleDemoteUser(user.id)}
-                                  className="text-orange-600 border-orange-600 hover:bg-orange-50"
-                                >
-                                  <UserX className="w-4 h-4 mr-1" />
-                                  Demote
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
                         )}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             </TabsContent>
           </Tabs>

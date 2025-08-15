@@ -20,6 +20,7 @@ const Booking = lazy(() => import("./pages/Booking"));
 const Contact = lazy(() => import("./pages/Contact"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const Profile = lazy(() => import("./pages/Profile"));
+const SavedPhotos = lazy(() => import("./pages/SavedPhotos"));
 const AlertExamples = lazy(() => import("./components/examples/AlertExamples"));
 
 const QRAccess = lazy(() => import("./components/QRAccess"));
@@ -99,6 +100,11 @@ const App = () => {
                   <Route path="/profile" element={
                     <ProtectedRoute>
                       <Profile />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/saved-photos" element={
+                    <ProtectedRoute>
+                      <SavedPhotos />
                     </ProtectedRoute>
                   } />
                   <Route path="/admin" element={

@@ -27,12 +27,12 @@ const QRManagement: React.FC<QRManagementProps> = () => {
   const [selectedQRCode, setSelectedQRCode] = useState<QRCodeType | null>(null);
   const [useCustomDomain, setUseCustomDomain] = useState(false);
   const [customDomain, setCustomDomain] = useState("");
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingQRCode, setEditingQRCode] = useState<QRCodeType | null>(null);
-  const [extendHours, setExtendHours] = useState("24");
-  const [noExpiration, setNoExpiration] = useState(false);
-  const [noUsageLimit, setNoUsageLimit] = useState(false);
-  const [newMaxUsage, setNewMaxUsage] = useState("");
+  const [editExpirationHours, setEditExpirationHours] = useState("24");
+  const [editMaxUsage, setEditMaxUsage] = useState("");
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [qrCodeToDelete, setQrCodeToDelete] = useState<QRCodeType | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currentUser } = useAuth();
@@ -157,6 +157,8 @@ const QRManagement: React.FC<QRManagementProps> = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/qr-codes'] });
+      setIsDeleteDialogOpen(false);
+      setQrCodeToDelete(null);
       toast({
         title: "QR Code Deleted",
         description: "QR code removed successfully",
@@ -195,32 +197,34 @@ const QRManagement: React.FC<QRManagementProps> = () => {
 
   // Edit QR code mutation
   const editQRCodeMutation = useMutation({
-    mutationFn: async (data: { qrCodeId: string; updates: any }) => {
+    mutationFn: async (data: { id: string; expiresAt: string | null; maxUsage?: number }) => {
       if (!currentUser) throw new Error('User not authenticated');
       
       const token = await currentUser.getIdToken();
-      const response = await fetch(`/api/admin/qr-codes/${data.qrCodeId}`, {
+      const response = await fetch(`/api/admin/qr-codes/${data.id}`, {
         method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(data.updates),
+        body: JSON.stringify({ 
+          expiresAt: data.expiresAt,
+          maxUsage: data.maxUsage 
+        }),
       });
       if (!response.ok) throw new Error('Failed to update QR code');
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/qr-codes'] });
-      setEditDialogOpen(false);
+      setIsEditDialogOpen(false);
       setEditingQRCode(null);
-      resetEditForm();
       toast({
         title: "QR Code Updated",
         description: "QR code settings updated successfully",
       });
     },
-    onError: (error) => {
+    onError: () => {
       toast({
         title: "Error",
         description: "Failed to update QR code",
@@ -240,7 +244,7 @@ const QRManagement: React.FC<QRManagementProps> = () => {
       await createQRCodeMutation.mutateAsync({
         eventId: selectedEvent.id,
         url: qrUrl,
-        expirationHours: parseInt(expirationHours),
+        expirationHours: parseInt(expirationHours) === 0 ? null : parseInt(expirationHours),
         maxUsage: maxUsage ? parseInt(maxUsage) : undefined,
       });
     } finally {
@@ -269,46 +273,49 @@ const QRManagement: React.FC<QRManagementProps> = () => {
 
   const editQRCode = (qrCode: QRCodeType) => {
     setEditingQRCode(qrCode);
-    setNoExpiration(false);
-    setNoUsageLimit(!qrCode.maxUsage);
-    setNewMaxUsage(qrCode.maxUsage?.toString() || "");
-    setExtendHours("24");
-    setEditDialogOpen(true);
+    // Set default values based on current QR code
+    if (qrCode.expiresAt) {
+      const now = new Date();
+      const expiry = new Date(qrCode.expiresAt);
+      const diffHours = Math.floor((expiry.getTime() - now.getTime()) / (1000 * 60 * 60));
+      setEditExpirationHours(diffHours > 0 ? diffHours.toString() : "24");
+    } else {
+      setEditExpirationHours("0"); // No expiration
+    }
+    setEditMaxUsage(qrCode.maxUsage ? qrCode.maxUsage.toString() : "");
+    setIsEditDialogOpen(true);
   };
 
-  const resetEditForm = () => {
-    setExtendHours("24");
-    setNoExpiration(false);
-    setNoUsageLimit(false);
-    setNewMaxUsage("");
-  };
-
-  const handleEditQRCode = () => {
+  const handleEditQRCode = async () => {
     if (!editingQRCode) return;
 
-    const updates: any = {};
-    
-    if (noExpiration) {
-      updates.noExpiration = true;
-    } else if (extendHours && parseInt(extendHours) > 0) {
-      updates.extendHours = parseInt(extendHours);
-    }
-    
-    if (noUsageLimit) {
-      updates.noUsageLimit = true;
-    } else if (newMaxUsage && parseInt(newMaxUsage) > 0) {
-      updates.maxUsage = parseInt(newMaxUsage);
+    let expiresAt: string | null = null;
+    if (parseInt(editExpirationHours) !== 0) {
+      const now = new Date();
+      now.setHours(now.getHours() + parseInt(editExpirationHours));
+      expiresAt = now.toISOString();
     }
 
-    if (Object.keys(updates).length > 0) {
-      editQRCodeMutation.mutate({
-        qrCodeId: editingQRCode.id,
-        updates
-      });
+    await editQRCodeMutation.mutateAsync({
+      id: editingQRCode.id,
+      expiresAt,
+      maxUsage: editMaxUsage ? parseInt(editMaxUsage) : undefined,
+    });
+  };
+
+  const confirmDelete = (qrCode: QRCodeType) => {
+    setQrCodeToDelete(qrCode);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteQRCode = () => {
+    if (qrCodeToDelete) {
+      deleteQRCodeMutation.mutate(qrCodeToDelete.id);
     }
   };
 
-  const isExpired = (expiresAt: string) => {
+  const isExpired = (expiresAt: string | null) => {
+    if (!expiresAt) return false; // No expiration means never expires
     return new Date(expiresAt).getTime() < Date.now();
   };
 
@@ -325,7 +332,9 @@ const QRManagement: React.FC<QRManagementProps> = () => {
     return <Badge variant="default">Active</Badge>;
   };
 
-  const formatExpirationTime = (expiresAt: string) => {
+  const formatExpirationTime = (expiresAt: string | null) => {
+    if (!expiresAt) return 'Never expires';
+    
     const expiry = new Date(expiresAt);
     const now = new Date();
     const diffMs = expiry.getTime() - now.getTime();
@@ -446,6 +455,7 @@ const QRManagement: React.FC<QRManagementProps> = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="0">No Expiration (Never expires)</SelectItem>
                     <SelectItem value="1">1 Hour</SelectItem>
                     <SelectItem value="6">6 Hours</SelectItem>
                     <SelectItem value="12">12 Hours</SelectItem>
@@ -454,9 +464,12 @@ const QRManagement: React.FC<QRManagementProps> = () => {
                     <SelectItem value="72">72 Hours (3 Days)</SelectItem>
                     <SelectItem value="168">1 Week</SelectItem>
                     <SelectItem value="720">1 Month</SelectItem>
-                    <SelectItem value="87600">No Limit (10 years)</SelectItem>
+                    <SelectItem value="8760">1 Year</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Choose "No Expiration" for QR codes that never expire
+                </p>
               </div>
 
               {/* Usage Limit */}
@@ -581,7 +594,7 @@ const QRManagement: React.FC<QRManagementProps> = () => {
                             <span className="text-sm">{formatExpirationTime(qrCode.expiresAt)}</span>
                           </div>
                           <div className="text-xs text-gray-500">
-                            {new Date(qrCode.expiresAt).toLocaleDateString()}
+                            {qrCode.expiresAt ? new Date(qrCode.expiresAt).toLocaleDateString() : 'Never expires'}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -622,17 +635,17 @@ const QRManagement: React.FC<QRManagementProps> = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => window.open(qrCode.accessUrl, '_blank')}
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
                               onClick={() => editQRCode(qrCode)}
                               title="Edit QR Code"
                             >
                               <Edit className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(qrCode.accessUrl, '_blank')}
+                            >
+                              <ExternalLink className="h-3 w-3" />
                             </Button>
                             <Button
                               size="sm"
@@ -649,7 +662,7 @@ const QRManagement: React.FC<QRManagementProps> = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => deleteQRCodeMutation.mutate(qrCode.id)}
+                              onClick={() => confirmDelete(qrCode)}
                               className="text-red-600 hover:text-red-700"
                             >
                               <Trash2 className="h-3 w-3" />
@@ -688,7 +701,7 @@ const QRManagement: React.FC<QRManagementProps> = () => {
                             </div>
                             <div className="text-xs font-medium">{formatExpirationTime(qrCode.expiresAt)}</div>
                             <div className="text-xs text-gray-500">
-                              {new Date(qrCode.expiresAt).toLocaleDateString()}
+                              {qrCode.expiresAt ? new Date(qrCode.expiresAt).toLocaleDateString() : 'Never expires'}
                             </div>
                           </div>
                           <div>
@@ -739,20 +752,20 @@ const QRManagement: React.FC<QRManagementProps> = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => window.open(qrCode.accessUrl, '_blank')}
-                              className="text-xs"
-                            >
-                              <ExternalLink className="h-3 w-3 mr-1" />
-                              Open
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
                               onClick={() => editQRCode(qrCode)}
                               className="text-xs"
                             >
                               <Edit className="h-3 w-3 mr-1" />
                               Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(qrCode.accessUrl, '_blank')}
+                              className="text-xs"
+                            >
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              Open
                             </Button>
                           </div>
                           <div className="grid grid-cols-2 gap-2 mt-2">
@@ -772,7 +785,7 @@ const QRManagement: React.FC<QRManagementProps> = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => deleteQRCodeMutation.mutate(qrCode.id)}
+                              onClick={() => confirmDelete(qrCode)}
                               className="text-xs text-red-600 hover:text-red-700"
                             >
                               <Trash2 className="h-3 w-3 mr-1" />
@@ -875,13 +888,7 @@ const QRManagement: React.FC<QRManagementProps> = () => {
       </Dialog>
 
       {/* Edit QR Code Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={(open) => {
-        setEditDialogOpen(open);
-        if (!open) {
-          setEditingQRCode(null);
-          resetEditForm();
-        }
-      }}>
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -889,109 +896,77 @@ const QRManagement: React.FC<QRManagementProps> = () => {
               Edit QR Code: {editingQRCode?.eventTitle}
             </DialogTitle>
             <DialogDescription>
-              Update expiration time and usage limits for this QR code
+              Modify the expiration time and usage limits for this QR code.
             </DialogDescription>
           </DialogHeader>
           
           {editingQRCode && (
             <div className="space-y-4">
-              {/* Current Status */}
-              <div className="p-3 bg-gray-50 rounded-lg space-y-2 text-sm">
+              {/* Current QR Code Info */}
+              <div className="p-3 bg-gray-50 rounded-lg border space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="font-medium">Current Status:</span>
                   {getStatusBadge(editingQRCode)}
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-medium">Current Expires:</span>
+                  <span className="font-medium">Current Expiry:</span>
                   <span>{formatExpirationTime(editingQRCode.expiresAt)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-medium">Current Usage:</span>
+                  <span className="font-medium">Usage:</span>
                   <span>
                     {editingQRCode.usageCount}
-                    {editingQRCode.maxUsage ? `/${editingQRCode.maxUsage}` : ' (No limit)'}
+                    {editingQRCode.maxUsage ? `/${editingQRCode.maxUsage}` : ''}
                   </span>
                 </div>
               </div>
 
-              {/* Expiration Settings */}
-              <div>
-                <Label className="text-sm font-medium">Expiration Settings</Label>
-                <div className="mt-2 space-y-3">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="noExpiration"
-                      checked={noExpiration}
-                      onCheckedChange={(checked) => setNoExpiration(checked as boolean)}
-                    />
-                    <Label htmlFor="noExpiration" className="text-sm">
-                      Set no expiration limit (10 years)
-                    </Label>
-                  </div>
-                  
-                  {!noExpiration && (
-                    <div>
-                      <Label htmlFor="extendHours" className="text-sm">Extend expiration by hours</Label>
-                      <Select value={extendHours} onValueChange={setExtendHours}>
-                        <SelectTrigger className="mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="1">1 Hour</SelectItem>
-                          <SelectItem value="6">6 Hours</SelectItem>
-                          <SelectItem value="12">12 Hours</SelectItem>
-                          <SelectItem value="24">24 Hours (1 Day)</SelectItem>
-                          <SelectItem value="48">48 Hours (2 Days)</SelectItem>
-                          <SelectItem value="72">72 Hours (3 Days)</SelectItem>
-                          <SelectItem value="168">1 Week</SelectItem>
-                          <SelectItem value="720">1 Month</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+              {/* Edit Form */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-expiration">Expiration Time</Label>
+                  <Select value={editExpirationHours} onValueChange={setEditExpirationHours}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select expiration time" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">No expiration</SelectItem>
+                      <SelectItem value="1">1 hour</SelectItem>
+                      <SelectItem value="6">6 hours</SelectItem>
+                      <SelectItem value="24">24 hours</SelectItem>
+                      <SelectItem value="72">3 days</SelectItem>
+                      <SelectItem value="168">7 days</SelectItem>
+                      <SelectItem value="720">30 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {editExpirationHours === "0" && (
+                    <p className="text-xs text-gray-500">
+                      QR code will never expire and remain active indefinitely
+                    </p>
                   )}
                 </div>
-              </div>
 
-              {/* Usage Limit Settings */}
-              <div>
-                <Label className="text-sm font-medium">Usage Limit Settings</Label>
-                <div className="mt-2 space-y-3">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="noUsageLimit"
-                      checked={noUsageLimit}
-                      onCheckedChange={(checked) => setNoUsageLimit(checked as boolean)}
-                    />
-                    <Label htmlFor="noUsageLimit" className="text-sm">
-                      Remove usage limit (unlimited uses)
-                    </Label>
-                  </div>
-                  
-                  {!noUsageLimit && (
-                    <div>
-                      <Label htmlFor="newMaxUsage" className="text-sm">Set new usage limit</Label>
-                      <Input
-                        id="newMaxUsage"
-                        type="number"
-                        placeholder="Enter new limit"
-                        value={newMaxUsage}
-                        onChange={(e) => setNewMaxUsage(e.target.value)}
-                        min="1"
-                        className="mt-1"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Current usage: {editingQRCode.usageCount}
-                      </p>
-                    </div>
-                  )}
+                <div className="space-y-2">
+                  <Label htmlFor="edit-max-usage">Maximum Usage (Optional)</Label>
+                  <Input
+                    id="edit-max-usage"
+                    type="number"
+                    placeholder="Unlimited"
+                    value={editMaxUsage}
+                    onChange={(e) => setEditMaxUsage(e.target.value)}
+                    min="1"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Leave empty for unlimited usage
+                  </p>
                 </div>
               </div>
-
+              
               {/* Action Buttons */}
               <div className="flex gap-2 pt-2">
                 <Button
                   variant="outline"
-                  onClick={() => setEditDialogOpen(false)}
+                  onClick={() => setIsEditDialogOpen(false)}
                   className="flex-1"
                 >
                   Cancel
@@ -1001,7 +976,90 @@ const QRManagement: React.FC<QRManagementProps> = () => {
                   disabled={editQRCodeMutation.isPending}
                   className="flex-1"
                 >
-                  {editQRCodeMutation.isPending ? 'Updating...' : 'Update QR Code'}
+                  {editQRCodeMutation.isPending ? (
+                    <>Updating...</>
+                  ) : (
+                    <>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Update QR Code
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              Delete QR Code
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this QR code? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {qrCodeToDelete && (
+            <div className="space-y-4">
+              {/* QR Code Info */}
+              <div className="p-3 bg-red-50 rounded-lg border border-red-200 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="font-medium">Event:</span>
+                  <span>{qrCodeToDelete.eventTitle}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Status:</span>
+                  {getStatusBadge(qrCodeToDelete)}
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Usage:</span>
+                  <span>
+                    {qrCodeToDelete.usageCount} times used
+                    {qrCodeToDelete.maxUsage ? ` (limit: ${qrCodeToDelete.maxUsage})` : ''}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Created:</span>
+                  <span>{new Date(qrCodeToDelete.createdAt).toLocaleDateString()}</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <p className="text-sm text-yellow-800">
+                  <strong>Warning:</strong> Deleting this QR code will make it permanently inaccessible. 
+                  Anyone with the printed or shared QR code will no longer be able to use it.
+                </p>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDeleteDialogOpen(false)}
+                  className="flex-1"
+                  disabled={deleteQRCodeMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteQRCode}
+                  disabled={deleteQRCodeMutation.isPending}
+                  className="flex-1"
+                >
+                  {deleteQRCodeMutation.isPending ? (
+                    <>Deleting...</>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete QR Code
+                    </>
+                  )}
                 </Button>
               </div>
             </div>

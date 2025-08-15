@@ -60,7 +60,7 @@ import QRManagement from '@/components/QRManagement';
 import { Booking, ContactMessage, Event, Package } from '@shared/types';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
-import { DeleteConfirmation } from '@/components/ui/confirmation-alert';
+import { DeleteConfirmation, ConfirmationAlert } from '@/components/ui/confirmation-alert';
 
 interface AdminStats {
   totalEvents: number;
@@ -1143,9 +1143,32 @@ const AdminDashboard = () => {
                               >
                                 {event.isHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                               </Button>
-                              <DeleteConfirmation
-                                itemName={event.title}
-                                itemType="event"
+                              <ConfirmationAlert
+                                title="Delete Event"
+                                description={
+                                  <div className="space-y-3">
+                                    <p className="text-red-200">⚠️ This action is permanent and cannot be undone!</p>
+                                    <div className="bg-gray-800 p-3 rounded border-l-4 border-red-500">
+                                      <h4 className="font-semibold text-gray-100 mb-2">Event Details:</h4>
+                                      <div className="space-y-1 text-sm text-gray-300">
+                                        <div><span className="text-gray-400">Title:</span> {event.title}</div>
+                                        <div><span className="text-gray-400">Date:</span> {new Date(event.eventDate).toLocaleDateString()}</div>
+                                        <div><span className="text-gray-400">Location:</span> {event.location}</div>
+                                        <div><span className="text-gray-400">Photos:</span> {event.photoCount || 0} photos</div>
+                                        <div><span className="text-gray-400">Status:</span> {event.isPrivate ? 'Private' : 'Public'}</div>
+                                        <div><span className="text-gray-400">Created:</span> {event.createdAt ? new Date(event.createdAt).toLocaleDateString() : 'N/A'}</div>
+                                      </div>
+                                    </div>
+                                    <p className="text-red-200 text-sm">
+                                      • All photos will be permanently deleted<br/>
+                                      • Users will lose access to saved photos<br/>
+                                      • QR codes will become invalid
+                                    </p>
+                                  </div>
+                                }
+                                confirmText="Delete Event"
+                                cancelText="Cancel"
+                                variant="destructive"
                                 onConfirm={() => handleDeleteEvent(event.id)}
                                 trigger={
                                   <Button 
@@ -1337,9 +1360,38 @@ const AdminDashboard = () => {
                                 <Eye className="h-4 w-4 mr-1" />
                                 View
                               </Button>
-                              <DeleteConfirmation
-                                itemName={booking.name || 'booking'}
-                                itemType="booking"
+                              <ConfirmationAlert
+                                title="Delete Booking"
+                                description={
+                                  <div className="space-y-3">
+                                    <p className="text-red-200">⚠️ This action is permanent and cannot be undone!</p>
+                                    <div className="bg-gray-800 p-3 rounded border-l-4 border-red-500">
+                                      <h4 className="font-semibold text-gray-100 mb-2">Booking Details:</h4>
+                                      <div className="space-y-1 text-sm text-gray-300">
+                                        <div><span className="text-gray-400">Client:</span> {booking.name || 'Unknown'}</div>
+                                        <div><span className="text-gray-400">Event Type:</span> {booking.eventType}</div>
+                                        <div><span className="text-gray-400">Date:</span> {new Date(booking.eventDate).toLocaleDateString()}</div>
+                                        {booking.location && <div><span className="text-gray-400">Location:</span> {booking.location}</div>}
+                                        <div><span className="text-gray-400">Status:</span> <span className={
+                                          booking.status === 'confirmed' ? 'text-green-400' :
+                                          booking.status === 'cancelled' ? 'text-red-400' : 'text-yellow-400'
+                                        }>{booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}</span></div>
+                                        <div><span className="text-gray-400">Amount:</span> ₹{booking.amount || 0}</div>
+                                        {booking.email && <div><span className="text-gray-400">Email:</span> {booking.email}</div>}
+                                        {booking.phone && <div><span className="text-gray-400">Phone:</span> {booking.phone}</div>}
+                                        <div><span className="text-gray-400">Booked:</span> {booking.createdAt ? new Date(booking.createdAt).toLocaleDateString() : 'N/A'}</div>
+                                      </div>
+                                    </div>
+                                    <p className="text-red-200 text-sm">
+                                      • All booking information will be lost<br/>
+                                      • Client contact history will be removed<br/>
+                                      • Payment records will be deleted
+                                    </p>
+                                  </div>
+                                }
+                                confirmText="Delete Booking"
+                                cancelText="Cancel"
+                                variant="destructive"
                                 onConfirm={() => handleDeleteBooking(booking.id)}
                                 trigger={
                                   <Button 

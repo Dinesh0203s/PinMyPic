@@ -1,5 +1,4 @@
 import { MongoClient, GridFSBucket, Db } from 'mongodb';
-import { getOptimizedMongoClientOptions } from './database-optimizations';
 
 export class MongoDBService {
   private client: MongoClient | null = null;
@@ -25,7 +24,10 @@ export class MongoDBService {
         // Initialize connection string with current environment variables
         this.initializeConnectionString();
         
-        this.client = new MongoClient(this.connectionString, getOptimizedMongoClientOptions());
+        this.client = new MongoClient(this.connectionString, {
+          serverSelectionTimeoutMS: 10000, // 10 second timeout for Atlas
+          connectTimeoutMS: 10000,
+        });
         await this.client.connect();
         
         // Test the connection
@@ -68,10 +70,6 @@ export class MongoDBService {
       throw new Error('GridFS not initialized');
     }
     return this.gridFS;
-  }
-
-  getClient(): MongoClient | null {
-    return this.client;
   }
 
   async ensureConnection(): Promise<void> {

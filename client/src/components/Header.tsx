@@ -12,13 +12,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import SavedPhotosModal from '@/components/SavedPhotosModal';
 import logoImage from '@assets/pinmypic_removed bg_1750753890638.png';
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [savedPhotosModalOpen, setSavedPhotosModalOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, userData, logout, loginWithGoogle } = useAuth();
@@ -461,14 +459,7 @@ const Header = () => {
           </div>
         )}
       </div>
-      
-      {/* Saved Photos Modal */}
-      {currentUser && (
-        <SavedPhotosModal
-          open={savedPhotosModalOpen}
-          onOpenChange={setSavedPhotosModalOpen}
-        />
-      )}
+
     </header>
   );
 };

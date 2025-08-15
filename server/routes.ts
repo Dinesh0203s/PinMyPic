@@ -2385,35 +2385,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { qrCodeId } = req.params;
       const updates = req.body;
       
-      // Handle expiration time extension
-      if (updates.extendHours) {
-        const currentQRCode = await storage.getQRCode(qrCodeId);
-        if (!currentQRCode) {
-          return res.status(404).json({ error: "QR code not found" });
-        }
-        
-        // Calculate new expiration time
-        const currentExpiry = new Date(currentQRCode.expiresAt);
-        const newExpiry = new Date(currentExpiry.getTime() + (updates.extendHours * 60 * 60 * 1000));
-        updates.expiresAt = newExpiry.toISOString();
-        delete updates.extendHours;
-      }
-      
-      // Handle "no limit" option for expiration
-      if (updates.noExpiration) {
-        // Set expiration to 10 years from now (effectively no limit)
-        const noExpiryDate = new Date();
-        noExpiryDate.setFullYear(noExpiryDate.getFullYear() + 10);
-        updates.expiresAt = noExpiryDate.toISOString();
-        delete updates.noExpiration;
-      }
-      
-      // Handle "no limit" option for usage
-      if (updates.noUsageLimit) {
-        updates.maxUsage = undefined;
-        delete updates.noUsageLimit;
-      }
-      
       const updatedQRCode = await storage.updateQRCode(qrCodeId, updates);
       if (!updatedQRCode) {
         return res.status(404).json({ error: "QR code not found" });
@@ -2577,6 +2548,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Import and use folder monitoring routes
   const folderMonitorRoutes = await import('./routes/folder-monitor.js');
   app.use('/api/folder-monitor', folderMonitorRoutes.default);
+
+  // Import and use QR routes
+  const qrRoutes = await import('./routes/qr.js');
+  app.use('/api/admin/qr-codes', qrRoutes.default);
 
   const httpServer = createServer(app);
   return httpServer;

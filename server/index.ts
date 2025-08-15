@@ -2,7 +2,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from "url";
-import { validateEnvironment } from './environment-validation';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,19 +11,12 @@ if (process.env.NODE_ENV !== 'production') {
   dotenv.config({ path: envPath });
 }
 
-// Validate environment variables before starting the application
-validateEnvironment();
-
 import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
 import multer from "multer";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { mongoService } from "./mongodb";
-import { applyProductionOptimizations, setupMemoryManagement, requestTimeoutMiddleware } from "./production-optimizations";
-import { createCompressionMiddleware, setCacheHeaders, createRateLimiter, createBodySizeLimiter, setSecurityHeaders, createPerformanceLogger } from "./performance-middleware";
-import { getOptimizedMongoClientOptions, createOptimizedIndexes, monitorConnectionPool } from "./database-optimizations";
-import { createResponseCache, createFieldSelector } from "./api-optimizations";
 
 // Global error handlers for production deployment
 process.on('unhandledRejection', (reason, promise) => {
@@ -38,61 +30,19 @@ process.on('uncaughtException', (error) => {
 });
 const app = express();
 
-// Apply production optimizations
-applyProductionOptimizations(app);
-setupMemoryManagement();
-
-// Performance middleware (apply before other middleware)
-if (process.env.NODE_ENV === 'production') {
-  app.use(createPerformanceLogger());
-  app.use(setSecurityHeaders);
-  app.use(createRateLimiter());
-  app.use(requestTimeoutMiddleware(45000)); // 45 second timeout
-}
-
-// Enhanced compression
-app.use(createCompressionMiddleware());
-
-// Cache headers for better performance
-app.use(setCacheHeaders);
-
-// API response caching (5 minutes for most endpoints)
-app.use('/api/events', createResponseCache(300000));
-app.use('/api/packages', createResponseCache(600000)); // 10 minutes for packages
-app.use('/api/user/profile', createResponseCache(60000)); // 1 minute for profile
-
-// Field selection for API responses
-app.use('/api/', createFieldSelector());
-
-// Body size limiting
-app.use(createBodySizeLimiter('100mb')); // Increased for photo uploads
-
-// Initialize MongoDB connection with optimizations
+// Initialize MongoDB connection
 async function initializeMongoDB() {
   try {
     await mongoService.connect();
-    
-    // Create optimized indexes for better query performance
-    const db = mongoService.getDb();
-    await createOptimizedIndexes(db);
-    
-    // Monitor connection pool in production
-    if (process.env.NODE_ENV === 'production') {
-      const client = mongoService.getClient();
-      if (client) {
-        monitorConnectionPool(client);
-      }
-    }
-    
     // Test the connection by creating an admin user if needed
     const { mongoStorage } = await import('./mongo-storage');
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@pinmypic.com';
+    const adminEmail = process.env.ADMIN_EMAIL || 'dond2674@gmail.com';
     const existingAdmin = await mongoStorage.getUserByEmail(adminEmail);
     
     if (!existingAdmin) {
       await mongoStorage.createUser({
         email: adminEmail,
-        displayName: 'Admin User',
+        displayName: 'Dinesh S',
         firebaseUid: 'admin_owner',
         isAdmin: true,
         adminRole: 'owner',

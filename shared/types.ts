@@ -109,7 +109,7 @@ export interface QRCode {
   eventTitle: string;
   qrCodeDataUrl: string;
   accessUrl: string;
-  expiresAt: string;
+  expiresAt: string | null; // Allow null for no expiration
   isActive: boolean;
   usageCount: number;
   maxUsage?: number;
@@ -208,7 +208,7 @@ export const insertQRCodeSchema = z.object({
   eventTitle: z.string(),
   qrCodeDataUrl: z.string(),
   accessUrl: z.string(),
-  expiresAt: z.string(),
+  expiresAt: z.string().nullable(), // Allow null for no expiration
   isActive: z.boolean().default(true),
   usageCount: z.number().default(0),
   maxUsage: z.number().optional(),

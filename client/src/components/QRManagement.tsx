@@ -113,7 +113,11 @@ const QRManagement: React.FC<QRManagementProps> = () => {
         },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to create QR code');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('QR creation failed:', response.status, errorText);
+        throw new Error(`Failed to create QR code: ${response.status} - ${errorText}`);
+      }
       return response.json();
     },
     onSuccess: () => {

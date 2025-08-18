@@ -2246,21 +2246,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/generate-qr", async (req: any, res) => {
     // Development bypass for authentication issues
     if (process.env.NODE_ENV === 'development') {
-      req.user = {
-        firebaseUid: 'dev-admin',
-        email: process.env.ADMIN_EMAIL,
-        userData: {
-          id: 'dev-admin',
+      // Try to authenticate normally first, fall back to dev user if needed
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        req.user = {
           firebaseUid: 'dev-admin',
           email: process.env.ADMIN_EMAIL,
-          isAdmin: true
+          userData: {
+            id: 'dev-admin',
+            firebaseUid: 'dev-admin',
+            email: process.env.ADMIN_EMAIL,
+            isAdmin: true
+          }
+        };
+      } else {
+        // Try to parse the token for development
+        try {
+          const token = authHeader.split(' ')[1];
+          const parts = token.split('.');
+          if (parts.length >= 2) {
+            const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+            if (payload.uid && payload.email) {
+              req.user = {
+                firebaseUid: payload.uid,
+                email: payload.email,
+                userData: {
+                  id: payload.uid,
+                  firebaseUid: payload.uid,
+                  email: payload.email,
+                  isAdmin: true // Grant admin access in development
+                }
+              };
+            } else {
+              // Fallback to dev user
+              req.user = {
+                firebaseUid: 'dev-admin',
+                email: process.env.ADMIN_EMAIL,
+                userData: {
+                  id: 'dev-admin',
+                  firebaseUid: 'dev-admin',
+                  email: process.env.ADMIN_EMAIL,
+                  isAdmin: true
+                }
+              };
+            }
+          }
+        } catch (error) {
+          console.log('Failed to parse token in development, using dev user');
+          req.user = {
+            firebaseUid: 'dev-admin',
+            email: process.env.ADMIN_EMAIL,
+            userData: {
+              id: 'dev-admin',
+              firebaseUid: 'dev-admin',
+              email: process.env.ADMIN_EMAIL,
+              isAdmin: true
+            }
+          };
         }
-      };
+      }
     }
     try {
+      console.log('QR generation request:', {
+        body: req.body,
+        user: req.user?.userData?.email,
+        isAdmin: req.user?.userData?.isAdmin
+      });
+      
       const { eventId, url, expirationHours = 24, maxUsage } = req.body;
 
       if (!eventId || !url) {
+        console.log('QR generation failed: Missing eventId or url');
         return res.status(400).json({ 
           success: false, 
           message: 'Event ID and URL are required' 
@@ -2277,9 +2333,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Calculate expiration date based on user input
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + parseInt(expirationHours));
+      let expiresAt: Date | null = null;
       const timestamp = Date.now();
+      
+      // Only set expiration if expirationHours is provided and not 0 (no expiration)
+      if (expirationHours !== null && expirationHours !== undefined && expirationHours !== 0) {
+        expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + parseInt(expirationHours.toString()));
+      }
       
       // Save QR code to database first to get the ID
       const qrCodeData = {
@@ -2287,7 +2348,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         eventTitle: event.title,
         qrCodeDataUrl: '', // Will be updated below
         accessUrl: '', // Will be updated below
-        expiresAt: expiresAt.toISOString(),
+        expiresAt: expiresAt ? expiresAt.toISOString() : null,
         isActive: true,
         usageCount: 0,
         maxUsage: maxUsage ? parseInt(maxUsage) : undefined,
@@ -2297,7 +2358,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const savedQRCode = await storage.createQRCode(qrCodeData);
       
       // Create URL with QR code ID and expiration parameters
-      const qrUrl = `${url}?qrId=${savedQRCode.id}&expires=${expiresAt.getTime()}&ts=${timestamp}`;
+      const qrUrl = expiresAt 
+        ? `${url}?qrId=${savedQRCode.id}&expires=${expiresAt.getTime()}&ts=${timestamp}`
+        : `${url}?qrId=${savedQRCode.id}&ts=${timestamp}`;
 
       // Generate QR code as data URL
       const qrCodeDataUrl = await QRCode.toDataURL(qrUrl, {
@@ -2321,7 +2384,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         qrCodeDataUrl,
         url: qrUrl,
         eventId,
-        expiresAt: expiresAt.toISOString()
+        expiresAt: expiresAt ? expiresAt.toISOString() : null
       });
 
     } catch (error) {

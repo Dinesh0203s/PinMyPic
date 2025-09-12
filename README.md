@@ -176,5 +176,3 @@ For Windows 11 users with GPU acceleration:
 MIT License - see LICENSE file for details.
 
 ---
-
-👉 Do you want me to also add **separate deployment steps** (for Azure + Hostinger), so anyone can replicate your setup?

@@ -162,7 +162,7 @@ const EventsPreview = () => {
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center text-gray-600">
                     <Calendar className="h-4 w-4 mr-2" />
-                    <span className="text-sm">{new Date(event.eventDate).toLocaleDateString()}</span>
+                    <span className="text-sm">{new Date(event.eventDate).toLocaleDateString('en-GB')}</span>
                   </div>
                   <div className="flex items-center text-gray-600">
                     <Users className="h-4 w-4 mr-2" />

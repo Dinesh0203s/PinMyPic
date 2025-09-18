@@ -3,6 +3,20 @@ import type { Config } from "tailwindcss";
 export default {
   darkMode: ["class"],
   content: ["./client/index.html", "./client/src/**/*.{js,jsx,ts,tsx}"],
+  safelist: [
+    "from-pink-500",
+    "to-orange-500", 
+    "bg-gradient-to-r",
+    "bg-gray-200",
+    "h-2",
+    "w-full",
+    "overflow-hidden",
+    "rounded-full",
+    "relative",
+    "h-full",
+    "flex-1",
+    "transition-all"
+  ],
   theme: {
     extend: {
       borderRadius: {

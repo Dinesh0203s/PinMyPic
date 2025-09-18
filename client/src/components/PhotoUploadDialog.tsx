@@ -53,45 +53,91 @@ export function PhotoUploadDialog({
     setHasWakeLockSupport('wakeLock' in navigator);
   }, []);
 
-  // Load persisted upload state on mount
+  // Clear persisted upload state on page refresh to prevent errors
   useEffect(() => {
-    const loadPersistedState = () => {
+    const clearStateOnRefresh = () => {
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
+          // Check if page was refreshed by looking for navigation type
+          const navigationEntry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+          const isPageRefresh = navigationEntry?.type === 'reload';
+          
+          if (isPageRefresh) {
+            // Automatically clear localStorage on page refresh to prevent errors
+            clearPersistedState();
+            console.log('Upload state cleared due to page refresh');
+            return;
+          }
+
+          // Only attempt to load persisted state if not a page refresh
           const { files, uploading } = JSON.parse(saved);
-          if (files && files.length > 0) {
-            setUploadFiles(files);
-            if (uploading) {
-              toast({
-                title: "Upload resumed",
-                description: `Found ${files.length} photos from previous session. Continue uploading?`,
-                action: (
-                  <Button 
-                    size="sm" 
-                    onClick={() => {
-                      // Reset pending files and restart upload
-                      const pendingFiles = files.map((f: UploadFile) => 
-                        f.status === 'uploading' ? { ...f, status: 'pending' } : f
-                      );
-                      setUploadFiles(pendingFiles);
-                      handleUploadAll();
-                    }}
-                  >
-                    Resume
-                  </Button>
-                )
-              });
+          if (files && files.length > 0 && Array.isArray(files)) {
+            // Validate that files have the required structure
+            const validStatuses = ['pending', 'uploading', 'completed', 'error'] as const;
+            const validFiles = files.filter((f: any) => 
+              f && f.file && f.id && validStatuses.includes(f.status) && typeof f.progress === 'number'
+            ) as UploadFile[];
+            
+            if (validFiles.length > 0) {
+              setUploadFiles(validFiles);
+              if (uploading) {
+                toast({
+                  title: "Upload resumed",
+                  description: `Found ${validFiles.length} photos from previous session. Continue uploading or clear them?`,
+                  action: (
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        onClick={() => {
+                          // Reset pending files and restart upload
+                          const pendingFiles = validFiles.map((f: UploadFile) => 
+                            f.status === 'uploading' ? { ...f, status: 'pending' as const } : f
+                          );
+                          setUploadFiles(pendingFiles);
+                          handleUploadAll();
+                        }}
+                      >
+                        Resume
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => {
+                          clearPersistedState();
+                          setUploadFiles([]);
+                          toast({
+                            title: "Cleared",
+                            description: "Previous upload session cleared."
+                          });
+                        }}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  )
+                });
+              }
+            } else {
+              // Invalid data, clear it
+              clearPersistedState();
             }
           }
         }
       } catch (error) {
-        console.error('Failed to load persisted upload state:', error);
+        console.error('Failed to handle persisted upload state:', error);
+        // Clear corrupted data
+        clearPersistedState();
+        toast({
+          title: "Upload state cleared",
+          description: "Previous upload session data was corrupted and has been cleared.",
+          variant: "default"
+        });
       }
     };
 
     if (eventId && isOpen) {
-      loadPersistedState();
+      clearStateOnRefresh();
     }
   }, [eventId, isOpen]);
 

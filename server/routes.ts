@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { spawn } from "child_process";
 import { storage } from "./storage";
 import { authenticateUser, requireAdmin, requireOwner, type AuthenticatedRequest } from "./middleware/auth";
 import { insertUserSchema, insertEventSchema, insertBookingSchema, insertContactMessageSchema, insertPackageSchema, User, Photo } from "@shared/types";
@@ -294,12 +295,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Lightweight endpoint for gallery page - returns all events with minimal data
+  // Lightweight endpoint for gallery page - returns paginated events with minimal data
   app.get("/api/events/all", async (req, res) => {
     try {
+      // Parse pagination parameters
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 12;
+      const search = (req.query.search as string) || '';
+      const sortBy = (req.query.sortBy as string) || 'eventDate';
+      const sortOrder = (req.query.sortOrder as string) || 'desc';
+      
+      // Validate pagination parameters
+      const validatedPage = Math.max(1, page);
+      const validatedLimit = Math.min(Math.max(1, limit), 50); // Max 50 events per page
+      const offset = (validatedPage - 1) * validatedLimit;
+
       const events = await storage.getEvents();
+      
+      // Filter events (hide private and hidden events for public access)
+      let filteredEvents = events.filter(event => !event.isHidden);
+      
+      // Apply search filter if provided
+      if (search.trim()) {
+        const searchLower = search.toLowerCase();
+        filteredEvents = filteredEvents.filter(event => 
+          event.title.toLowerCase().includes(searchLower) ||
+          event.location?.toLowerCase().includes(searchLower) ||
+          event.category?.toLowerCase().includes(searchLower)
+        );
+      }
+      
+      // Sort events
+      filteredEvents.sort((a, b) => {
+        let aValue, bValue;
+        
+        switch (sortBy) {
+          case 'title':
+            aValue = a.title.toLowerCase();
+            bValue = b.title.toLowerCase();
+            break;
+          case 'location':
+            aValue = (a.location || '').toLowerCase();
+            bValue = (b.location || '').toLowerCase();
+            break;
+          case 'photoCount':
+            aValue = a.photoCount || 0;
+            bValue = b.photoCount || 0;
+            break;
+          case 'eventDate':
+          default:
+            aValue = new Date(a.eventDate).getTime();
+            bValue = new Date(b.eventDate).getTime();
+            break;
+        }
+        
+        if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+        return 0;
+      });
+      
+      // Calculate pagination info
+      const totalEvents = filteredEvents.length;
+      const totalPages = Math.ceil(totalEvents / validatedLimit);
+      const hasNextPage = validatedPage < totalPages;
+      const hasPrevPage = validatedPage > 1;
+      
+      // Get paginated events
+      const paginatedEvents = filteredEvents.slice(offset, offset + validatedLimit);
+      
       // Return only essential fields for listing view
-      const lightweightEvents = events.map(event => ({
+      const lightweightEvents = paginatedEvents.map(event => ({
         id: event.id,
         title: event.title,
         eventDate: event.eventDate,
@@ -312,14 +377,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         publicPin: event.publicPin,
         brideGroomPin: event.brideGroomPin
       }));
-      res.json(lightweightEvents);
+      
+      res.json({
+        events: lightweightEvents,
+        pagination: {
+          currentPage: validatedPage,
+          totalPages,
+          totalEvents,
+          limit: validatedLimit,
+          hasNextPage,
+          hasPrevPage,
+          nextPage: hasNextPage ? validatedPage + 1 : null,
+          prevPage: hasPrevPage ? validatedPage - 1 : null
+        },
+        filters: {
+          search,
+          sortBy,
+          sortOrder
+        }
+      });
     } catch (error) {
       console.error("Error fetching all events:", error);
       res.status(500).json({ error: "Failed to fetch events" });
     }
   });
 
-  // Admin events route - returns all events including private ones
+  // Admin events route - returns all events including private ones with pagination
   app.get("/api/admin/events", async (req: any, res) => {
     // Development bypass for authentication issues
     if (process.env.NODE_ENV === 'development') {
@@ -336,6 +419,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     
     try {
+      // Parse pagination parameters
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const search = (req.query.search as string) || '';
+      const sortBy = (req.query.sortBy as string) || 'eventDate';
+      const sortOrder = (req.query.sortOrder as string) || 'desc';
+      
+      // Validate pagination parameters
+      const validatedPage = Math.max(1, page);
+      const validatedLimit = Math.min(Math.max(1, limit), 50); // Max 50 events per page
+      const offset = (validatedPage - 1) * validatedLimit;
+
       const events = await storage.getEvents();
       
       // Fix photo counts for all events
@@ -349,7 +444,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      res.json(events);
+      // Apply search filter if provided (admin can see all events)
+      let filteredEvents = events;
+      if (search.trim()) {
+        const searchLower = search.toLowerCase();
+        filteredEvents = events.filter(event => 
+          event.title.toLowerCase().includes(searchLower) ||
+          event.location?.toLowerCase().includes(searchLower) ||
+          event.category?.toLowerCase().includes(searchLower) ||
+          event.description?.toLowerCase().includes(searchLower)
+        );
+      }
+      
+      // Sort events
+      filteredEvents.sort((a, b) => {
+        let aValue, bValue;
+        
+        switch (sortBy) {
+          case 'title':
+            aValue = a.title.toLowerCase();
+            bValue = b.title.toLowerCase();
+            break;
+          case 'location':
+            aValue = (a.location || '').toLowerCase();
+            bValue = (b.location || '').toLowerCase();
+            break;
+          case 'photoCount':
+            aValue = a.photoCount || 0;
+            bValue = b.photoCount || 0;
+            break;
+          case 'category':
+            aValue = (a.category || '').toLowerCase();
+            bValue = (b.category || '').toLowerCase();
+            break;
+          case 'createdAt':
+            aValue = new Date(a.createdAt || a.eventDate).getTime();
+            bValue = new Date(b.createdAt || b.eventDate).getTime();
+            break;
+          case 'updatedAt':
+            aValue = new Date(a.updatedAt || a.createdAt || a.eventDate).getTime();
+            bValue = new Date(b.updatedAt || b.createdAt || b.eventDate).getTime();
+            break;
+          case 'eventDate':
+          default:
+            aValue = new Date(a.eventDate).getTime();
+            bValue = new Date(b.eventDate).getTime();
+            break;
+        }
+        
+        if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+        return 0;
+      });
+      
+      // Calculate pagination info
+      const totalEvents = filteredEvents.length;
+      const totalPages = Math.ceil(totalEvents / validatedLimit);
+      const hasNextPage = validatedPage < totalPages;
+      const hasPrevPage = validatedPage > 1;
+      
+      // Get paginated events
+      const paginatedEvents = filteredEvents.slice(offset, offset + validatedLimit);
+      
+      res.json({
+        events: paginatedEvents,
+        pagination: {
+          currentPage: validatedPage,
+          totalPages,
+          totalEvents,
+          limit: validatedLimit,
+          hasNextPage,
+          hasPrevPage,
+          nextPage: hasNextPage ? validatedPage + 1 : null,
+          prevPage: hasPrevPage ? validatedPage - 1 : null
+        },
+        filters: {
+          search,
+          sortBy,
+          sortOrder
+        }
+      });
     } catch (error) {
       console.error("Error fetching admin events:", error);
       res.status(500).json({ error: "Failed to fetch events" });
@@ -1069,6 +1243,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Save to Firebase after response is sent
       storage.createBooking(bookingData).then(booking => {
         console.log('Booking saved successfully:', booking.id);
+        
+        // Send WhatsApp notification (async, don't wait for it)
+        try {
+          // const { spawn } = await import('child_process'); // Now imported at top
+          const pythonProcess = spawn('python3', [
+            'server/whatsapp_notification.py',
+            'booking',
+            JSON.stringify(bookingData)
+          ]);
+          
+          pythonProcess.on('close', (code: number) => {
+            if (code === 0) {
+              console.log('WhatsApp booking notification sent successfully');
+            } else {
+              console.log('WhatsApp booking notification failed');
+            }
+          });
+        } catch (error) {
+          console.log('WhatsApp notification error:', error);
+        }
       }).catch(error => {
         console.error('Error saving booking:', error);
       });
@@ -1557,6 +1751,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const messageData = insertContactMessageSchema.parse(req.body);
       const message = await storage.createContactMessage(messageData);
+      
+      // Send WhatsApp notification (async, don't wait for it)
+      try {
+        const { spawn } = await import('child_process');
+        const pythonProcess = spawn('python3', [
+          'server/whatsapp_notification.py',
+          'contact',
+          JSON.stringify(messageData)
+        ]);
+        
+        pythonProcess.on('close', (code) => {
+          if (code === 0) {
+            console.log('WhatsApp contact notification sent successfully');
+          } else {
+            console.log('WhatsApp contact notification failed');
+          }
+        });
+      } catch (error) {
+        console.log('WhatsApp notification error:', error);
+      }
+      
       res.status(201).json(message);
     } catch (error) {
       console.error("Error creating contact message:", error);
@@ -1612,6 +1827,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to update message" });
     }
   });
+
 
   // Clear all contact messages - put this BEFORE the parameterized route
   app.delete("/api/contact/clear-all", async (req: any, res) => {
@@ -2515,16 +2731,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // API endpoint to get all events (for QR generation)
-  app.get("/api/events/all", async (req: any, res) => {
-    try {
-      const events = await storage.getEvents();
-      res.json(events);
-    } catch (error) {
-      console.error("Error fetching all events:", error);
-      res.status(500).json({ error: "Failed to fetch events" });
-    }
-  });
+  // Note: /api/events/all endpoint is defined earlier in the file with pagination support
 
   // Face recognition monitoring endpoints
   app.get('/api/face-recognition/health', async (req, res) => {

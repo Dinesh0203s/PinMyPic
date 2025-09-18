@@ -526,7 +526,7 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
                     ) : (
                       <p className="mt-1 text-sm text-gray-600 flex items-center">
                         <Calendar className="h-4 w-4 mr-2" />
-                        {new Date(event.eventDate).toLocaleDateString()}
+                        {new Date(event.eventDate).toLocaleDateString('en-GB')}
                       </p>
                     )}
                   </div>
@@ -647,11 +647,11 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
                     </div>
                     <div className="flex items-center justify-between text-sm mt-2">
                       <span className="text-gray-500">Created:</span>
-                      <span className="text-gray-600">{new Date(event.createdAt).toLocaleDateString()}</span>
+                      <span className="text-gray-600">{new Date(event.createdAt).toLocaleDateString('en-GB')}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm mt-1">
                       <span className="text-gray-500">Updated:</span>
-                      <span className="text-gray-600">{new Date(event.updatedAt).toLocaleDateString()}</span>
+                      <span className="text-gray-600">{new Date(event.updatedAt).toLocaleDateString('en-GB')}</span>
                     </div>
                   </div>
                 </CardContent>

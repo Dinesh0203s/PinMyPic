@@ -53,7 +53,8 @@ const QRManagement: React.FC<QRManagementProps> = () => {
       throw new Error(`Failed to fetch events: ${response.statusText}`);
     }
     
-    return response.json();
+    const data = await response.json();
+    return data.events || [];
   };
 
   // Fetch all events using the admin endpoint with authentication
@@ -441,7 +442,7 @@ const QRManagement: React.FC<QRManagementProps> = () => {
                           <div className="flex flex-col w-full">
                             <span className="font-medium">{event.title}</span>
                             <span className="text-xs text-muted-foreground">
-                              {new Date(event.eventDate).toLocaleDateString()} • {event.location} • {event.category}
+                              {new Date(event.eventDate).toLocaleDateString('en-GB')} • {event.location} • {event.category}
                             </span>
                           </div>
                         </SelectItem>
@@ -598,7 +599,7 @@ const QRManagement: React.FC<QRManagementProps> = () => {
                             <span className="text-sm">{formatExpirationTime(qrCode.expiresAt)}</span>
                           </div>
                           <div className="text-xs text-gray-500">
-                            {qrCode.expiresAt ? new Date(qrCode.expiresAt).toLocaleDateString() : 'Never expires'}
+                            {qrCode.expiresAt ? new Date(qrCode.expiresAt).toLocaleDateString('en-GB') : 'Never expires'}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -614,7 +615,7 @@ const QRManagement: React.FC<QRManagementProps> = () => {
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3 text-gray-400" />
                             <span className="text-sm">
-                              {new Date(qrCode.createdAt).toLocaleDateString()}
+                              {new Date(qrCode.createdAt).toLocaleDateString('en-GB')}
                             </span>
                           </div>
                         </TableCell>
@@ -705,7 +706,7 @@ const QRManagement: React.FC<QRManagementProps> = () => {
                             </div>
                             <div className="text-xs font-medium">{formatExpirationTime(qrCode.expiresAt)}</div>
                             <div className="text-xs text-gray-500">
-                              {qrCode.expiresAt ? new Date(qrCode.expiresAt).toLocaleDateString() : 'Never expires'}
+                              {qrCode.expiresAt ? new Date(qrCode.expiresAt).toLocaleDateString('en-GB') : 'Never expires'}
                             </div>
                           </div>
                           <div>
@@ -726,7 +727,7 @@ const QRManagement: React.FC<QRManagementProps> = () => {
                             <span className="text-xs">Created</span>
                           </div>
                           <div className="text-xs font-medium">
-                            {new Date(qrCode.createdAt).toLocaleDateString()}
+                            {new Date(qrCode.createdAt).toLocaleDateString('en-GB')}
                           </div>
                         </div>
 
@@ -1029,7 +1030,7 @@ const QRManagement: React.FC<QRManagementProps> = () => {
                 </div>
                 <div className="flex justify-between">
                   <span className="font-medium">Created:</span>
-                  <span>{new Date(qrCodeToDelete.createdAt).toLocaleDateString()}</span>
+                  <span>{new Date(qrCodeToDelete.createdAt).toLocaleDateString('en-GB')}</span>
                 </div>
               </div>
 

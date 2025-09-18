@@ -6,10 +6,9 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-if (process.env.NODE_ENV !== 'production') {
-  const envPath = path.resolve(__dirname, '..', '.env');
-  dotenv.config({ path: envPath });
-}
+// Load environment variables from .env file
+const envPath = path.resolve(__dirname, '..', '.env');
+dotenv.config({ path: envPath });
 
 import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";

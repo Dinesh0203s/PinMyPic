@@ -34,42 +34,13 @@ export function initializeFirebaseAdmin() {
 
 export async function verifyFirebaseToken(token: string) {
   try {
-    // In development, if we can't verify the token due to Firebase Admin issues,
-    // we'll decode it locally (less secure but allows development to continue)
-    if (process.env.NODE_ENV === 'development') {
-      try {
-        const app = initializeFirebaseAdmin();
-        const decodedToken = await app.auth().verifyIdToken(token);
-        return decodedToken;
-      } catch (adminError) {
-        console.warn('Firebase Admin verification failed, using fallback for development:', adminError);
-
-        // Basic JWT decode for development (not secure for production)
-        const parts = token.split('.');
-        if (parts.length !== 3) {
-          throw new Error('Invalid token format');
-        }
-
-        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-
-        // Basic validation
-        if (!payload.uid || !payload.email) {
-          throw new Error('Invalid token payload');
-        }
-
-        return {
-          uid: payload.uid,
-          email: payload.email,
-          firebase: payload
-        };
-      }
-    } else {
-      const app = initializeFirebaseAdmin();
-      const decodedToken = await app.auth().verifyIdToken(token);
-      return decodedToken;
-    }
+    // Always use full Firebase Admin verification (no development bypass)
+    const app = initializeFirebaseAdmin();
+    const decodedToken = await app.auth().verifyIdToken(token);
+    console.log('Full Firebase verification: Token successfully verified');
+    return decodedToken;
   } catch (error) {
-    console.error('Error verifying Firebase token:', error);
+    console.error('Firebase verification failed - Full verification enforced:', error);
     throw new Error('Invalid token');
   }
 }

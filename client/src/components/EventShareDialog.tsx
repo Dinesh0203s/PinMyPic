@@ -92,7 +92,7 @@ export function EventShareDialog({ open, onOpenChange, event }: EventShareDialog
   const shareToWhatsApp = () => {
     if (!shareUrl || !event) return;
     
-    const message = `🎉 Check out photos from "${event.title}"!\n\n📅 ${new Date(event.eventDate).toLocaleDateString()}\n📍 ${event.location}\n\n✨ View and find your photos here: ${shareUrl}`;
+    const message = `🎉 Check out photos from "${event.title}"!\n\n📅 ${new Date(event.eventDate).toLocaleDateString('en-GB')}\n📍 ${event.location}\n\n✨ View and find your photos here: ${shareUrl}`;
     const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };
@@ -101,7 +101,7 @@ export function EventShareDialog({ open, onOpenChange, event }: EventShareDialog
     if (!shareUrl || !event) return;
     
     // Instagram doesn't support direct link sharing, so we copy a formatted message
-    const message = `🎉 Check out photos from "${event.title}"!\n\n📅 ${new Date(event.eventDate).toLocaleDateString()}\n📍 ${event.location}\n\n✨ Link: ${shareUrl}`;
+    const message = `🎉 Check out photos from "${event.title}"!\n\n📅 ${new Date(event.eventDate).toLocaleDateString('en-GB')}\n📍 ${event.location}\n\n✨ Link: ${shareUrl}`;
     
     navigator.clipboard.writeText(message).then(() => {
       toast({

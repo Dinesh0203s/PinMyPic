@@ -256,7 +256,7 @@ export function ManageUsersDialog({ onUserUpdated }: ManageUsersDialogProps) {
                           <TableCell>
                             <div className="flex items-center gap-2 text-sm text-gray-500">
                               <Calendar className="h-3 w-3" />
-                              {new Date(user.createdAt).toLocaleDateString()}
+                              {new Date(user.createdAt).toLocaleDateString('en-GB')}
                             </div>
                           </TableCell>
                           <TableCell>

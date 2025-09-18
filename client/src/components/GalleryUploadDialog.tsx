@@ -74,7 +74,7 @@ export function GalleryUploadDialog({ events, onPhotosUploaded }: GalleryUploadD
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h4 className="font-medium mb-2">{selectedEvent.title}</h4>
                 <div className="text-sm text-gray-600 space-y-1">
-                  <p>Date: {new Date(selectedEvent.eventDate).toLocaleDateString()}</p>
+                  <p>Date: {new Date(selectedEvent.eventDate).toLocaleDateString('en-GB')}</p>
                   <p>Location: {selectedEvent.location}</p>
                   <p>Current Photos: {selectedEvent.photoCount || 0}</p>
                 </div>

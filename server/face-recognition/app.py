@@ -312,5 +312,5 @@ def compare_faces():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    # Run on a different port to avoid conflict with main app
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    # Production mode - disable debug and reloader for security
+    app.run(host='0.0.0.0', port=5001, debug=False, use_reloader=False)

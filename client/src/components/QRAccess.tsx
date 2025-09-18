@@ -173,7 +173,7 @@ const QRAccess: React.FC<QRAccessProps> = () => {
                 <Calendar className="w-5 h-5 text-blue-600" />
                 <div>
                   <p className="font-medium text-gray-900">Event Date</p>
-                  <p className="text-gray-600">{new Date(event.eventDate).toLocaleDateString()}</p>
+                  <p className="text-gray-600">{new Date(event.eventDate).toLocaleDateString('en-GB')}</p>
                 </div>
               </div>
               

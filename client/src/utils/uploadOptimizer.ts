@@ -54,10 +54,13 @@ export class UploadOptimizer {
     
     if (totalFiles <= 20) return Math.min(5, maxBatchSize);
     if (totalFiles <= 50) return Math.min(8, maxBatchSize);
-    if (totalFiles <= 100) return Math.min(6, maxBatchSize);
+    if (totalFiles <= 100) return Math.min(10, maxBatchSize);
+    if (totalFiles <= 500) return Math.min(8, maxBatchSize);
+    if (totalFiles <= 1000) return Math.min(6, maxBatchSize);
+    if (totalFiles <= 5000) return Math.min(4, maxBatchSize);
     
-    // For very large uploads, be more conservative
-    return Math.min(4, maxBatchSize);
+    // For extremely large uploads (5000+), be very conservative
+    return Math.min(3, maxBatchSize);
   }
 
   /**
@@ -67,7 +70,10 @@ export class UploadOptimizer {
     if (fileCount <= 20) return 0;
     if (fileCount <= 50) return 100;
     if (fileCount <= 100) return 200;
-    return 300;
+    if (fileCount <= 500) return 300;
+    if (fileCount <= 1000) return 400;
+    if (fileCount <= 5000) return 500;
+    return 600; // For very large uploads (5000+)
   }
 
   /**
@@ -102,19 +108,19 @@ export class UploadOptimizer {
    */
   canHandleUpload(files: File[]): { canHandle: boolean; reason?: string } {
     const totalSize = files.reduce((sum, file) => sum + file.size, 0);
-    const maxSize = 10 * 1024 * 1024 * 1024; // 10GB limit
+    const maxSize = 100 * 1024 * 1024 * 1024; // 100GB limit
     
     if (totalSize > maxSize) {
       return { 
         canHandle: false, 
-        reason: `Total size (${(totalSize / 1024 / 1024 / 1024).toFixed(1)}GB) exceeds 10GB limit` 
+        reason: `Total size (${(totalSize / 1024 / 1024 / 1024).toFixed(1)}GB) exceeds 100GB limit` 
       };
     }
     
-    if (files.length > 1000) {
+    if (files.length > 10000) {
       return { 
         canHandle: false, 
-        reason: `Too many files (${files.length}). Maximum 1000 files allowed.` 
+        reason: `Too many files (${files.length}). Maximum 10,000 files allowed.` 
       };
     }
     

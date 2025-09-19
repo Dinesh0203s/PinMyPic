@@ -236,7 +236,7 @@ export function PhotoUploadDialog({
     }
 
     // Warn user for large uploads with estimated time
-    if (imageFiles.length > 50) {
+    if (imageFiles.length > 100) {
       const estimatedTime = optimizer.estimateUploadTime(imageFiles);
       toast({
         title: "Large upload detected",

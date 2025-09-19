@@ -64,7 +64,7 @@ const upload = multer({
   storage: storage,
   limits: {
     fileSize: 100 * 1024 * 1024, // 100MB limit per file (increased for larger photos)
-    files: 200 // Max 200 files for larger batch uploads
+    files: 2000 // Max 2000 files for very large batch uploads
   },
   fileFilter: (req, file, cb) => {
     try {
@@ -96,9 +96,9 @@ app.use(compression({
   }
 }));
 
-// Increased payload limits for large photo uploads
-app.use(express.json({ limit: '200mb' })); // Increased for large photo batches
-app.use(express.urlencoded({ extended: false, limit: '200mb' }));
+// Increased payload limits for very large photo uploads
+app.use(express.json({ limit: '2gb' })); // Increased for very large photo batches
+app.use(express.urlencoded({ extended: false, limit: '2gb' }));
 
 // Serve static files from uploads directory (for local storage fallback)
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -311,7 +311,7 @@ app.get('/api/images/:fileId', async (req, res) => {
 
 // Add multer middleware only for POST requests to photo upload endpoint
 app.post('/api/photos/upload', (req, res, next) => {
-  upload.array('photos', 200)(req, res, (err) => {
+  upload.array('photos', 2000)(req, res, (err) => {
     if (err) {
       console.error('Multer upload error:', err);
       
@@ -322,7 +322,7 @@ app.post('/api/photos/upload', (req, res, next) => {
         return res.status(400).json({ error: 'File too large. Max size is 100MB per file' });
       }
       if (err.code === 'LIMIT_FILE_COUNT') {
-        return res.status(400).json({ error: 'Too many files. Max 200 files allowed' });
+        return res.status(400).json({ error: 'Too many files. Max 2000 files allowed per batch' });
       }
       
       // Generic error

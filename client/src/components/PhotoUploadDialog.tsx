@@ -23,6 +23,7 @@ interface UploadFile {
   status: 'pending' | 'uploading' | 'completed' | 'error';
   url?: string;
   error?: string;
+  jobId?: string; // For async uploads
 }
 
 export function PhotoUploadDialog({ 
@@ -316,14 +317,35 @@ export function PhotoUploadDialog({
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
               const result = JSON.parse(xhr.responseText);
-              updateUploadFiles(prev => prev.map(f => 
-                f.id === uploadFile.id ? { 
-                  ...f, 
-                  status: 'completed' as const, 
-                  url: result.url,
-                  progress: 100 
-                } : f
-              ));
+              
+              // Check if this is an async upload response
+              if (result.async && result.jobId) {
+                // For async uploads, mark as completed but show job status
+                updateUploadFiles(prev => prev.map(f => 
+                  f.id === uploadFile.id ? { 
+                    ...f, 
+                    status: 'completed' as const, 
+                    jobId: result.jobId,
+                    progress: 100 
+                  } : f
+                ));
+                
+                // Show async upload notification
+                toast({
+                  title: "Large upload processing",
+                  description: `Your ${result.totalFiles} photos are being processed in the background. Job ID: ${result.jobId}`,
+                });
+              } else {
+                // Normal upload completion
+                updateUploadFiles(prev => prev.map(f => 
+                  f.id === uploadFile.id ? { 
+                    ...f, 
+                    status: 'completed' as const, 
+                    url: result.url,
+                    progress: 100 
+                  } : f
+                ));
+              }
               resolve();
             } catch (error) {
               reject(new Error('Invalid response format'));

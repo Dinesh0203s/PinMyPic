@@ -24,7 +24,7 @@ export class UploadOptimizer {
   /**
    * Creates optimal batches for file uploads based on browser capabilities
    */
-  createOptimalBatches(files: File[], maxBatchSize = 10): UploadBatch[] {
+  createOptimalBatches(files: File[], maxBatchSize = 20): UploadBatch[] {
     const batches: UploadBatch[] = [];
     
     // Calculate optimal batch size based on total files and memory constraints
@@ -52,28 +52,26 @@ export class UploadOptimizer {
     const memoryInfo = (performance as any).memory;
     const availableMemory = memoryInfo ? memoryInfo.jsHeapSizeLimit - memoryInfo.usedJSHeapSize : null;
     
-    if (totalFiles <= 20) return Math.min(5, maxBatchSize);
-    if (totalFiles <= 50) return Math.min(8, maxBatchSize);
-    if (totalFiles <= 100) return Math.min(10, maxBatchSize);
-    if (totalFiles <= 500) return Math.min(8, maxBatchSize);
-    if (totalFiles <= 1000) return Math.min(6, maxBatchSize);
-    if (totalFiles <= 5000) return Math.min(4, maxBatchSize);
+    if (totalFiles <= 20) return Math.min(10, maxBatchSize);
+    if (totalFiles <= 50) return Math.min(15, maxBatchSize);
+    if (totalFiles <= 100) return Math.min(20, maxBatchSize);
+    if (totalFiles <= 500) return Math.min(15, maxBatchSize);
+    if (totalFiles <= 1000) return Math.min(12, maxBatchSize);
+    if (totalFiles <= 5000) return Math.min(10, maxBatchSize);
     
-    // For extremely large uploads (5000+), be very conservative
-    return Math.min(3, maxBatchSize);
+    // For extremely large uploads (5000+), still maintain good performance
+    return Math.min(8, maxBatchSize);
   }
 
   /**
    * Adds delay between batches to prevent browser freezing
    */
   calculateBatchDelay(fileCount: number): number {
-    if (fileCount <= 20) return 0;
-    if (fileCount <= 50) return 100;
-    if (fileCount <= 100) return 200;
-    if (fileCount <= 500) return 300;
-    if (fileCount <= 1000) return 400;
-    if (fileCount <= 5000) return 500;
-    return 600; // For very large uploads (5000+)
+    if (fileCount <= 100) return 0; // No delay for small uploads
+    if (fileCount <= 500) return 50; // Minimal delay
+    if (fileCount <= 1000) return 100;
+    if (fileCount <= 5000) return 150;
+    return 200; // Reduced delay even for very large uploads
   }
 
   /**

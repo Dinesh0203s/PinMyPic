@@ -23,16 +23,16 @@ interface UserQueueStats {
 class FaceProcessingQueue {
   private queue: QueueItem[] = [];
   private processing = false;
-  private maxConcurrent = 8; // Increased from 3 to handle more concurrent processing
+  private maxConcurrent = 20; // Increased to handle large batch uploads
   private retryAttempts = 3;
-  private processingDelay = 200; // Reduced delay for faster throughput
+  private processingDelay = 50; // Minimal delay for maximum throughput
   private activeProcessing = new Set<string>();
   
   // User-based queue management
   private userQueues = new Map<string, QueueItem[]>();
   private userStats = new Map<string, UserQueueStats>();
-  private maxItemsPerUser = 20; // Prevent any single user from overwhelming the queue
-  private userConcurrencyLimit = 3; // Max concurrent processing per user
+  private maxItemsPerUser = 10000; // Allow up to 10,000 photos per user
+  private userConcurrencyLimit = 20; // Increased concurrent processing per user for large uploads
   
   // Performance monitoring
   private processedCount = 0;
@@ -198,8 +198,8 @@ class FaceProcessingQueue {
           console.error('Critical error in batch processing:', error);
         });
 
-        // Reduced delay for higher throughput
-        if (this.queue.length > 0) {
+        // Minimal delay for maximum throughput, only if queue is very large
+        if (this.queue.length > 50) {
           await new Promise(resolve => setTimeout(resolve, this.processingDelay));
         }
 

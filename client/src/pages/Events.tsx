@@ -783,22 +783,40 @@ const Events = () => {
   const loadEventPhotos = async (eventId: string, page: number = 1) => {
     setLoadingPhotos(true);
     try {
-      const response = await fetch(`/api/events/${eventId}/photos?page=${page}&limit=500&lightweight=true`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.photos) {
-          setPhotos(data.photos);
-          
-          // Preload first 10 images for better performance
-          const imageUrls = data.photos.slice(0, 10).map((photo: any) => photo.url);
-          if (imageUrls.length > 0) {
-            import('@/utils/imagePreloader').then(({ imagePreloader }) => {
-              imagePreloader.preloadBatch(imageUrls, 3);
-            });
+      let allPhotos: Photo[] = [];
+      let currentPage = 1;
+      let hasMore = true;
+      const limit = 500; // Fetch 500 photos per request
+      
+      // Fetch all photos by making multiple paginated requests
+      while (hasMore) {
+        const response = await fetch(`/api/events/${eventId}/photos?page=${currentPage}&limit=${limit}&lightweight=true`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.photos && Array.isArray(data.photos)) {
+            allPhotos = [...allPhotos, ...data.photos];
+            hasMore = data.hasMore || false;
+            currentPage++;
+          } else {
+            // Fallback for old API format
+            if (Array.isArray(data)) {
+              allPhotos = [...allPhotos, ...data];
+            }
+            hasMore = false;
           }
         } else {
-          setPhotos(data); // Fallback for old API format
+          hasMore = false;
         }
+      }
+      
+      setPhotos(allPhotos);
+      
+      // Preload first 10 images for better performance
+      const imageUrls = allPhotos.slice(0, 10).map((photo: any) => photo.url);
+      if (imageUrls.length > 0) {
+        import('@/utils/imagePreloader').then(({ imagePreloader }) => {
+          imagePreloader.preloadBatch(imageUrls, 3);
+        });
       }
     } catch (error) {
       console.error('Error loading photos:', error);

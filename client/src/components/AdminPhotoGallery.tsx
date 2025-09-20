@@ -33,56 +33,71 @@ const AdminPhotoGallery = ({
   uploadingThumbnail,
   className = "" 
 }: AdminPhotoGalleryProps) => {
-  const [loadedPhotos, setLoadedPhotos] = useState<PhotoWithLoading[]>([]);
-  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 20 });
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 }); // Start with 50 photos
+  const [loadedPhotoIds, setLoadedPhotoIds] = useState<Set<string>>(new Set());
+  const [errorPhotoIds, setErrorPhotoIds] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // Initialize photos with loading states
+  // Reset state when photos change
   useEffect(() => {
-    if (Array.isArray(photos)) {
-      setLoadedPhotos(photos.map(photo => ({ ...photo, loaded: false, error: false })));
-    } else {
-      setLoadedPhotos([]);
-    }
+    setVisibleRange({ start: 0, end: 50 });
+    setLoadedPhotoIds(new Set());
+    setErrorPhotoIds(new Set());
   }, [photos]);
 
-  // Virtualized scrolling - load more photos as user scrolls
+  // Optimized scroll handler with throttling
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || !Array.isArray(photos)) return;
 
+    let timeoutId: NodeJS.Timeout;
+    
     const handleScroll = () => {
-      if (!containerRef.current) return;
+      if (timeoutId) clearTimeout(timeoutId);
       
-      const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-      const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
-      
-      // Load more photos when user scrolls to 80% of current content
-      if (scrollPercentage > 0.8 && Array.isArray(photos) && visibleRange.end < photos.length) {
-        setVisibleRange(prev => ({
-          ...prev,
-          end: Math.min(prev.end + 20, photos.length)
-        }));
-      }
+      timeoutId = setTimeout(() => {
+        if (!containerRef.current) return;
+        
+        const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+        const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+        
+        // Load more photos when user scrolls to 70% of current content
+        if (scrollPercentage > 0.7 && visibleRange.end < photos.length && !isLoadingMore) {
+          setIsLoadingMore(true);
+          
+          // Load more photos in batches
+          const nextBatchSize = Math.min(50, photos.length - visibleRange.end);
+          setVisibleRange(prev => ({
+            ...prev,
+            end: prev.end + nextBatchSize
+          }));
+          
+          // Reset loading state after a short delay
+          setTimeout(() => setIsLoadingMore(false), 300);
+        }
+      }, 100); // Throttle scroll events
     };
 
-    containerRef.current.addEventListener('scroll', handleScroll);
-    return () => containerRef.current?.removeEventListener('scroll', handleScroll);
-  }, [Array.isArray(photos) ? photos.length : 0, visibleRange.end]);
+    containerRef.current.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      containerRef.current?.removeEventListener('scroll', handleScroll);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [photos, visibleRange.end, isLoadingMore]);
 
-  // Intersection observer for lazy loading
+  // Intersection observer for lazy loading individual images
   useEffect(() => {
     observerRef.current = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             const photoId = entry.target.getAttribute('data-photo-id');
-            if (photoId) {
-              // Find the photo and trigger loading
-              const photo = loadedPhotos.find(p => p.id === photoId);
-              if (photo && !photo.loaded && !photo.error) {
-                const img = entry.target.querySelector('img') as HTMLImageElement;
-                if (img && !img.src) {
+            if (photoId && !loadedPhotoIds.has(photoId) && !errorPhotoIds.has(photoId)) {
+              const img = entry.target.querySelector('img') as HTMLImageElement;
+              if (img && !img.src) {
+                const photo = photos.find(p => p.id === photoId);
+                if (photo) {
                   img.src = photo.url;
                 }
               }
@@ -92,7 +107,7 @@ const AdminPhotoGallery = ({
       },
       {
         root: containerRef.current,
-        rootMargin: '100px', // Load images 100px before they come into view
+        rootMargin: '200px', // Load images 200px before they come into view
         threshold: 0.1
       }
     );
@@ -100,30 +115,22 @@ const AdminPhotoGallery = ({
     return () => {
       observerRef.current?.disconnect();
     };
-  }, [loadedPhotos]);
+  }, [photos, loadedPhotoIds, errorPhotoIds]);
 
   const handleImageLoad = (photoId: string) => {
-    setLoadedPhotos(prev => 
-      prev.map(photo => 
-        photo.id === photoId ? { ...photo, loaded: true } : photo
-      )
-    );
+    setLoadedPhotoIds(prev => new Set(prev).add(photoId));
   };
 
   const handleImageError = (photoId: string) => {
-    setLoadedPhotos(prev => 
-      prev.map(photo => 
-        photo.id === photoId ? { ...photo, error: true } : photo
-      )
-    );
+    setErrorPhotoIds(prev => new Set(prev).add(photoId));
   };
 
   const visiblePhotos = useMemo(() => {
-    if (!Array.isArray(loadedPhotos)) {
+    if (!Array.isArray(photos)) {
       return [];
     }
-    return loadedPhotos.slice(visibleRange.start, visibleRange.end);
-  }, [loadedPhotos, visibleRange]);
+    return photos.slice(visibleRange.start, visibleRange.end);
+  }, [photos, visibleRange]);
 
   if (loading) {
     return (
@@ -147,13 +154,15 @@ const AdminPhotoGallery = ({
   return (
     <div 
       ref={containerRef}
-      className={`max-h-[60vh] overflow-y-auto ${className}`}
+      className={`max-h-[70vh] overflow-y-auto ${className}`}
     >
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-1">
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-2 p-1">
         {visiblePhotos.map((photo) => (
           <AdminPhotoCard
             key={photo.id}
             photo={photo}
+            isLoaded={loadedPhotoIds.has(photo.id)}
+            hasError={errorPhotoIds.has(photo.id)}
             onLoad={() => handleImageLoad(photo.id)}
             onError={() => handleImageError(photo.id)}
             onPhotoClick={onPhotoClick}
@@ -171,20 +180,26 @@ const AdminPhotoGallery = ({
       {Array.isArray(photos) && visibleRange.end < photos.length && (
         <div className="flex justify-center py-6">
           <Loader2 className="h-6 w-6 animate-spin text-pink-500" />
-          <span className="ml-2 text-gray-600">Loading more photos...</span>
+          <span className="ml-2 text-gray-600">
+            {isLoadingMore ? 'Loading more photos...' : `Showing ${visibleRange.end} of ${photos.length} photos`}
+          </span>
         </div>
       )}
       
-      {/* Photos counter */}
-      <div className="text-center py-4 text-sm text-gray-500">
-        Showing {visibleRange.end} of {Array.isArray(photos) ? photos.length : 0} photos
-      </div>
+      {/* Photos counter - only show when not loading more */}
+      {!isLoadingMore && (
+        <div className="text-center py-4 text-sm text-gray-500">
+          Showing {visibleRange.end} of {Array.isArray(photos) ? photos.length : 0} photos
+        </div>
+      )}
     </div>
   );
 };
 
 interface AdminPhotoCardProps {
-  photo: PhotoWithLoading;
+  photo: Photo;
+  isLoaded: boolean;
+  hasError: boolean;
   onLoad: () => void;
   onError: () => void;
   onPhotoClick?: (photo: Photo) => void;
@@ -198,6 +213,8 @@ interface AdminPhotoCardProps {
 
 const AdminPhotoCard = ({ 
   photo, 
+  isLoaded,
+  hasError,
   onLoad, 
   onError, 
   onPhotoClick, 
@@ -253,31 +270,40 @@ const AdminPhotoCard = ({
       onClick={() => onPhotoClick?.(photo)}
     >
       {/* Error state */}
-      {photo.error && (
+      {hasError && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-          <ImageIcon className="h-8 w-8 text-gray-400" />
+          <ImageIcon className="h-6 w-6 text-gray-400" />
+        </div>
+      )}
+      
+      {/* Loading state */}
+      {!isLoaded && !hasError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+          <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
         </div>
       )}
       
       {/* Thumbnail badge */}
       {isThumbnail && (
-        <div className="absolute top-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full z-10">
-          Thumbnail
+        <div className="absolute top-1 left-1 bg-green-500 text-white text-xs px-1 py-0.5 rounded-full z-10">
+          T
         </div>
       )}
       
       {/* Image */}
-      <img
-        src={photo.url}
-        alt={photo.filename}
-        className="w-full h-full object-cover transition-all duration-300 group-hover:scale-110"
-        loading="lazy"
-        onLoad={onLoad}
-        onError={onError}
-      />
+      {!hasError && (
+        <img
+          src={isLoaded ? photo.url : undefined}
+          alt={photo.filename}
+          className="w-full h-full object-cover transition-all duration-300 group-hover:scale-110"
+          loading="lazy"
+          onLoad={onLoad}
+          onError={onError}
+        />
+      )}
       
-      {/* Filename overlay */}
-      <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs p-2 truncate">
+      {/* Filename overlay - only show on hover for smaller cards */}
+      <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs p-1 truncate opacity-0 group-hover:opacity-100 transition-opacity">
         {photo.filename}
       </div>
       
@@ -286,32 +312,32 @@ const AdminPhotoCard = ({
         className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex flex-wrap gap-2 p-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex flex-wrap gap-1 p-1" onClick={(e) => e.stopPropagation()}>
           <Button
             variant="secondary"
             size="sm"
-            className="bg-white/90 hover:bg-white"
+            className="bg-white/90 hover:bg-white h-6 w-6 p-0"
             onClick={(e) => {
               e.stopPropagation();
               onPhotoClick?.(photo);
             }}
             title="View full size"
           >
-            <Eye className="h-4 w-4" />
+            <Eye className="h-3 w-3" />
           </Button>
           <Button
             variant="secondary"
             size="sm"
-            className="bg-white/90 hover:bg-white"
+            className="bg-white/90 hover:bg-white h-6 w-6 p-0"
             onClick={handleDownload}
             title="Download photo"
           >
-            <Download className="h-4 w-4" />
+            <Download className="h-3 w-3" />
           </Button>
           <Button
             variant="secondary"
             size="sm"
-            className={`${isThumbnail ? "bg-green-500 text-white" : "bg-white/90 hover:bg-white"}`}
+            className={`h-6 w-6 p-0 ${isThumbnail ? "bg-green-500 text-white" : "bg-white/90 hover:bg-white"}`}
             onClick={(e) => {
               e.stopPropagation();
               onSetAsThumbnail?.(photo.url);
@@ -319,7 +345,7 @@ const AdminPhotoCard = ({
             disabled={uploadingThumbnail || isThumbnail}
             title={isThumbnail ? "Current thumbnail" : "Set as thumbnail"}
           >
-            <Camera className="h-4 w-4" />
+            <Camera className="h-3 w-3" />
           </Button>
           <DeleteConfirmation
             itemName={photo.filename || `Photo ${photo.id.slice(-6)}`}
@@ -330,28 +356,21 @@ const AdminPhotoCard = ({
               <Button
                 variant="secondary"
                 size="sm"
-                className="bg-red-500/90 hover:bg-red-500 text-white"
+                className="bg-red-500/90 hover:bg-red-500 text-white h-6 w-6 p-0"
                 disabled={deletingPhotoId === photo.id}
                 title="Delete photo"
                 onClick={(e) => e.stopPropagation()}
               >
                 {deletingPhotoId === photo.id ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-3 w-3" />
                 )}
               </Button>
             }
           />
         </div>
       </div>
-      
-      {/* Loading indicator for individual photos */}
-      {!photo.loaded && !photo.error && (
-        <div className="absolute bottom-2 right-2 bg-black/50 rounded-full p-1">
-          <Loader2 className="h-3 w-3 animate-spin text-white" />
-        </div>
-      )}
     </div>
   );
 };

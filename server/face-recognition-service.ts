@@ -66,8 +66,18 @@ async function initializeFaceRecognitionService() {
       }
     });
 
-    // Wait for the service to be ready
-    return waitForService();
+    // Wait for the service to be ready (non-blocking in production)
+    if (process.env.NODE_ENV === 'production') {
+      // In production, start service asynchronously without blocking startup
+      waitForService().then(() => {
+        console.log('Face recognition service is ready');
+      }).catch((err) => {
+        console.warn('Face recognition service failed to start:', err);
+      });
+      return Promise.resolve();
+    } else {
+      return waitForService();
+    }
     
   } catch (error) {
     console.error('Failed to initialize face recognition service:', error);

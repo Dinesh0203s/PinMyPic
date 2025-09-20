@@ -200,7 +200,7 @@ const QRShare: React.FC = () => {
                         <CardContent>
                           <div className="space-y-2 text-sm text-gray-600">
                             <p><strong>Category:</strong> {event.category}</p>
-                            <p><strong>Date:</strong> {new Date(event.eventDate).toLocaleDateString()}</p>
+                            <p><strong>Date:</strong> {new Date(event.eventDate).toLocaleDateString('en-GB')}</p>
                             {event.location && <p><strong>Location:</strong> {event.location}</p>}
                             <p><strong>Privacy:</strong> {event.isPrivate ? 'Private' : 'Public'}</p>
                             <p><strong>Photos:</strong> {event.photoCount || 0}</p>
@@ -248,7 +248,7 @@ const QRShare: React.FC = () => {
                       {/* Event Details */}
                       <div className="space-y-2 text-sm text-gray-600">
                         <p><strong>Event:</strong> {selectedEvent.title}</p>
-                        <p><strong>Date:</strong> {new Date(selectedEvent.eventDate).toLocaleDateString()}</p>
+                        <p><strong>Date:</strong> {new Date(selectedEvent.eventDate).toLocaleDateString('en-GB')}</p>
                         <p><strong>Photos:</strong> {selectedEvent.photoCount || 0}</p>
                       </div>
                       

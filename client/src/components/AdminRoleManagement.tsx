@@ -605,7 +605,7 @@ const AdminRoleManagement: React.FC<AdminRoleManagementProps> = ({ currentUser, 
                       </div>
                     </TableCell>
                     <TableCell>
-                      {new Date(user.createdAt).toLocaleDateString()}
+                      {new Date(user.createdAt).toLocaleDateString('en-GB')}
                     </TableCell>
                     <TableCell>
                       <Badge variant={user.isActive !== false ? "default" : "secondary"}>
@@ -657,7 +657,7 @@ const AdminRoleManagement: React.FC<AdminRoleManagementProps> = ({ currentUser, 
                   
                   <div className="mb-3">
                     <div className="text-xs text-gray-600 mb-1">Member since:</div>
-                    <div className="text-sm text-gray-800">{new Date(user.createdAt).toLocaleDateString()}</div>
+                    <div className="text-sm text-gray-800">{new Date(user.createdAt).toLocaleDateString('en-GB')}</div>
                   </div>
 
                   <div className="flex justify-end">

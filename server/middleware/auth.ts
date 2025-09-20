@@ -22,6 +22,28 @@ export async function authenticateUser(req: AuthenticatedRequest, res: Response,
     // Development bypass: If Firebase Admin is having issues, use token payload directly
     if (process.env.NODE_ENV === 'development') {
       console.log('Development mode: bypassing full Firebase verification');
+      
+      // Special bypass for admin test tokens on WhatsApp endpoints
+      if (token === 'test-token-admin' && req.path.startsWith('/api/whatsapp')) {
+        console.log('Development WhatsApp admin bypass activated');
+        req.user = {
+          firebaseUid: 'dev-admin-uid',
+          email: 'admin@pinmypic.com',
+          userData: {
+            id: 'dev-admin-uid',
+            firebaseUid: 'dev-admin-uid',
+            email: 'admin@pinmypic.com',
+            displayName: 'Development Admin',
+            isAdmin: true,
+            adminRole: 'owner',
+            adminPermissions: ['events', 'bookings', 'packages', 'photos', 'contacts', 'users', 'users_manage'],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }
+        };
+        return next();
+      }
+      
       try {
         const parts = token.split('.');
         if (parts.length >= 2) {

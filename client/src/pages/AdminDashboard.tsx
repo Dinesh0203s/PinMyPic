@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,7 +37,10 @@ import {
   Check,
   Database,
   HardDrive,
-  BarChart3
+  BarChart3,
+  ChevronLeft,
+  ChevronRight,
+  X
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -113,6 +116,10 @@ const AdminDashboard = () => {
   const [sortField, setSortField] = useState<keyof Booking>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  
+  // Booking pagination states
+  const [bookingCurrentPage, setBookingCurrentPage] = useState(1);
+  const [bookingItemsPerPage] = useState(12); // 3 columns x 4 rows
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -143,6 +150,15 @@ const AdminDashboard = () => {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [isGeneratingQR, setIsGeneratingQR] = useState(false);
   const [copiedQRUrl, setCopiedQRUrl] = useState(false);
+  
+  // Events pagination states
+  const [eventSearchTerm, setEventSearchTerm] = useState('');
+  const [eventSortBy, setEventSortBy] = useState('eventDate');
+  const [eventSortOrder, setEventSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [eventCurrentPage, setEventCurrentPage] = useState(1);
+  const [eventPagination, setEventPagination] = useState<any>(null);
+  const eventsPerPage = 20;
+  const searchInputRef = useRef<HTMLInputElement>(null);
   
   const { currentUser, userData } = useAuth();
   const navigate = useNavigate();
@@ -243,7 +259,58 @@ const AdminDashboard = () => {
     }
   };
 
+  // Fetch events with pagination
+  const fetchEvents = async (page = 1, search = '', sortBy = eventSortBy, sortOrder = eventSortOrder) => {
+    try {
+      const headers = await getAuthHeaders();
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: eventsPerPage.toString(),
+        search: search.trim(),
+        sortBy: sortBy,
+        sortOrder: sortOrder
+      });
+      
+      const response = await fetch(`/api/admin/events?${params}`, { headers });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.events && data.pagination) {
+          // New paginated API response
+          setEvents(data.events);
+          setEventPagination(data.pagination);
+          setEventCurrentPage(data.pagination.currentPage);
+        } else {
+          // Fallback for old API response format
+          setEvents(Array.isArray(data) ? data : []);
+          setEventCurrentPage(1);
+          setEventPagination({
+            currentPage: 1,
+            totalPages: 1,
+            totalEvents: Array.isArray(data) ? data.length : 0,
+            limit: eventsPerPage,
+            hasNextPage: false,
+            hasPrevPage: false,
+            nextPage: null,
+            prevPage: null
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching events:', error);
+    }
+  };
 
+  // Event pagination handlers
+  const handleEventPageChange = (page: number) => {
+    setEventCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleEventSortChange = (newSortBy: string, newSortOrder: string = eventSortOrder) => {
+    setEventSortBy(newSortBy);
+    setEventSortOrder(newSortOrder as 'asc' | 'desc');
+    setEventCurrentPage(1); // Reset to first page when sorting changes
+  };
 
   useEffect(() => {
     const fetchAdminData = async () => {
@@ -254,25 +321,26 @@ const AdminDashboard = () => {
         // Get authentication headers
         const headers = await getAuthHeaders();
 
-        // Fetch all data in parallel for better performance
+        // Fetch all data in parallel for better performance (excluding events which are now paginated)
         const promises = [
           fetch('/api/bookings', { headers }).then(res => res.ok ? res.json() : []).catch(() => []),
           fetch('/api/admin/stats', { headers }).then(res => res.ok ? res.json() : null).catch(() => null),
           fetch('/api/admin/storage', { headers }).then(res => res.ok ? res.json() : null).catch(() => null),
           fetch('/api/contact', { headers }).then(res => res.ok ? res.json() : []).catch(() => []),
-          fetch('/api/admin/events', { headers }).then(res => res.ok ? res.json() : []).catch(() => []),
           fetch('/api/packages', { headers }).then(res => res.ok ? res.json() : []).catch(() => [])
         ];
 
-        const [bookingsData, statsData, storageData, messagesData, eventsData, packagesData] = await Promise.all(promises);
+        const [bookingsData, statsData, storageData, messagesData, packagesData] = await Promise.all(promises);
 
         // Update all states at once
         setBookings(bookingsData || []);
         setStats(statsData);
         setStorageStats(storageData);
         setMessages(messagesData || []);
-        setEvents(eventsData || []);
         setPackages(packagesData || []);
+        
+        // Fetch events separately with pagination
+        await fetchEvents(eventCurrentPage, eventSearchTerm, eventSortBy, eventSortOrder);
         
         console.log('Admin Dashboard: Data fetch completed');
       } catch (error) {
@@ -284,6 +352,13 @@ const AdminDashboard = () => {
 
     fetchAdminData();
   }, [currentUser]);
+
+  // Handle events pagination updates
+  useEffect(() => {
+    if (currentUser) {
+      fetchEvents(eventCurrentPage, eventSearchTerm, eventSortBy, eventSortOrder);
+    }
+  }, [eventCurrentPage, eventSortBy, eventSortOrder, currentUser]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -493,20 +568,28 @@ const AdminDashboard = () => {
 
   const handleSort = (field: keyof Booking) => {
     if (sortField === field) {
+      // Same field clicked - toggle direction
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
+      // Different field clicked - set new field with ascending direction
       setSortField(field);
       setSortDirection('asc');
     }
   };
 
-  const getSortedAndFilteredBookings = () => {
+  const clearSort = () => {
+    setSortField('createdAt');
+    setSortDirection('desc');
+  };
+
+  // Memoized filtered and sorted bookings for performance
+  const sortedAndFilteredBookings = useMemo(() => {
     let filteredBookings = bookings.filter(booking => {
-      // Search filter
-      const matchesSearch = booking.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        booking.eventType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        booking.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        booking.location?.toLowerCase().includes(searchTerm.toLowerCase());
+      // Search filter (null-safe)
+      const matchesSearch = (booking.name ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (booking.eventType ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (booking.email ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (booking.location ?? '').toLowerCase().includes(searchTerm.toLowerCase());
       
       // Status filter
       const matchesStatus = statusFilter === 'all' || booking.status === statusFilter;
@@ -514,34 +597,87 @@ const AdminDashboard = () => {
       return matchesSearch && matchesStatus;
     });
 
-    // Sort bookings
+    // Simple single-field sort function
+    const getSortValue = (booking: Booking, field: keyof Booking) => {
+      let value = booking[field];
+      
+      // Handle date fields
+      if (field === 'eventDate' || field === 'createdAt') {
+        if (!value || value === '') return null;
+        const dateTime = new Date(value as string).getTime();
+        return Number.isNaN(dateTime) ? null : dateTime;
+      }
+      
+      // Handle string fields
+      if (typeof value === 'string') {
+        return value.toLowerCase();
+      }
+      
+      // Handle numeric fields
+      if (field === 'amount') {
+        return value || 0;
+      }
+      
+      return value || null;
+    };
+
+    // Sort bookings by single field
     filteredBookings.sort((a, b) => {
-      let aValue = a[sortField];
-      let bValue = b[sortField];
+      const aValue = getSortValue(a, sortField);
+      const bValue = getSortValue(b, sortField);
       
-      // Handle date sorting
-      if (sortField === 'eventDate' || sortField === 'createdAt') {
-        aValue = new Date(aValue as string).getTime();
-        bValue = new Date(bValue as string).getTime();
+      // Handle null values (null values go to end for asc, beginning for desc)
+      if ((aValue === null || aValue === undefined) && (bValue === null || bValue === undefined)) {
+        return 0;
       }
+      if (aValue === null || aValue === undefined) return sortDirection === 'asc' ? 1 : -1;
+      if (bValue === null || bValue === undefined) return sortDirection === 'asc' ? -1 : 1;
       
-      // Handle string sorting
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        aValue = aValue.toLowerCase();
-        bValue = bValue.toLowerCase();
-      }
+      // Compare values
+      if (aValue! < bValue!) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue! > bValue!) return sortDirection === 'asc' ? 1 : -1;
       
-      // Handle undefined values
-      if (aValue === undefined && bValue === undefined) return 0;
-      if (aValue === undefined) return sortDirection === 'asc' ? 1 : -1;
-      if (bValue === undefined) return sortDirection === 'asc' ? -1 : 1;
-      
-      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
 
     return filteredBookings;
+  }, [bookings, searchTerm, statusFilter, sortField, sortDirection]);
+
+  // Memoized pagination info for bookings
+  const bookingPagination = useMemo(() => {
+    const totalItems = sortedAndFilteredBookings.length;
+    const totalPages = Math.ceil(totalItems / bookingItemsPerPage);
+    
+    return {
+      currentPage: bookingCurrentPage,
+      totalPages,
+      totalItems,
+      itemsPerPage: bookingItemsPerPage,
+      hasNextPage: bookingCurrentPage < totalPages,
+      hasPrevPage: bookingCurrentPage > 1,
+      nextPage: bookingCurrentPage < totalPages ? bookingCurrentPage + 1 : null,
+      prevPage: bookingCurrentPage > 1 ? bookingCurrentPage - 1 : null
+    };
+  }, [sortedAndFilteredBookings.length, bookingCurrentPage, bookingItemsPerPage]);
+
+  // Memoized paginated bookings for current page
+  const paginatedBookings = useMemo(() => {
+    const startIndex = (bookingCurrentPage - 1) * bookingItemsPerPage;
+    const endIndex = startIndex + bookingItemsPerPage;
+    return sortedAndFilteredBookings.slice(startIndex, endIndex);
+  }, [sortedAndFilteredBookings, bookingCurrentPage, bookingItemsPerPage]);
+
+  // Clamp current page when total pages change
+  useEffect(() => {
+    if (bookingPagination.totalPages > 0 && bookingCurrentPage > bookingPagination.totalPages) {
+      setBookingCurrentPage(Math.max(1, bookingPagination.totalPages));
+    }
+  }, [bookingPagination.totalPages, bookingCurrentPage]);
+
+  // Handle page change for bookings
+  const handleBookingPageChange = (page: number) => {
+    setBookingCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const refreshData = async () => {
@@ -957,13 +1093,90 @@ const AdminDashboard = () => {
                 </div>
               </CardHeader>
               <CardContent className="px-2 sm:px-6">
+                {/* Search and Controls */}
+                <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                  <div className="flex-1">
+                    <form onSubmit={(e) => {
+                      e.preventDefault();
+                      // Trigger immediate search and reset to page 1
+                      setEventCurrentPage(1);
+                      fetchEvents(1, eventSearchTerm, eventSortBy, eventSortOrder);
+                    }} className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                        <Input
+                          ref={searchInputRef}
+                          placeholder="Search events by title, location, category..."
+                          value={eventSearchTerm}
+                          onChange={(e) => setEventSearchTerm(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                      <Button
+                        type="submit"
+                        variant="outline"
+                        size="default"
+                        className="px-4 flex items-center gap-2"
+                        aria-label="Search events"
+                      >
+                        <Search className="h-4 w-4" />
+                        Search
+                      </Button>
+                      {eventSearchTerm.trim() && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="default"
+                          onClick={() => {
+                            setEventSearchTerm('');
+                            setEventCurrentPage(1);
+                            fetchEvents(1, '', eventSortBy, eventSortOrder);
+                          }}
+                          className="px-4 flex items-center gap-2"
+                          aria-label="Clear search"
+                        >
+                          <X className="h-4 w-4" />
+                          Clear
+                        </Button>
+                      )}
+                    </form>
+                  </div>
+                  <Select value={`${eventSortBy}-${eventSortOrder}`} onValueChange={(value) => {
+                    const [field, direction] = value.split('-') as [string, 'asc' | 'desc'];
+                    handleEventSortChange(field, direction);
+                  }}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Sort by" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="eventDate-desc">Event Date (Newest First)</SelectItem>
+                      <SelectItem value="eventDate-asc">Event Date (Oldest First)</SelectItem>
+                      <SelectItem value="title-asc">Title A-Z</SelectItem>
+                      <SelectItem value="title-desc">Title Z-A</SelectItem>
+                      <SelectItem value="location-asc">Location A-Z</SelectItem>
+                      <SelectItem value="category-asc">Category A-Z</SelectItem>
+                      <SelectItem value="photoCount-desc">Most Photos</SelectItem>
+                      <SelectItem value="photoCount-asc">Least Photos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Results Summary */}
+                {eventPagination && (
+                  <div className="flex justify-between items-center mb-4">
+                    <p className="text-sm text-gray-600">
+                      Showing {events.length} of {eventPagination.totalEvents} events
+                    </p>
+                  </div>
+                )}
+
                 {/* Desktop Table View */}
                 <div className="hidden md:block overflow-x-auto border rounded-lg">
                   <Table className="min-w-full text-sm">
                     <TableHeader>
                       <TableRow>
                         <TableHead className="px-4">Event Title</TableHead>
-                        <TableHead>Date</TableHead>
+                        <TableHead>Event Date</TableHead>
                         <TableHead>Location</TableHead>
                         <TableHead>Category</TableHead>
                         <TableHead>Visibility</TableHead>
@@ -977,7 +1190,7 @@ const AdminDashboard = () => {
                         events.map((event) => (
                           <TableRow key={event.id}>
                             <TableCell className="font-medium">{event.title}</TableCell>
-                            <TableCell>{new Date(event.eventDate).toLocaleDateString()}</TableCell>
+                            <TableCell>{new Date(event.eventDate).toLocaleDateString('en-GB')}</TableCell>
                             <TableCell>{event.location}</TableCell>
                             <TableCell>
                               <Badge variant="outline">{event.category}</Badge>
@@ -1055,9 +1268,19 @@ const AdminDashboard = () => {
                       ) : (
                         <TableRow>
                           <TableCell colSpan={8} className="text-center py-8 text-gray-500">
-                            <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                            <p>No events created yet</p>
-                            <p className="text-sm mt-2">Create your first event to start managing photo galleries</p>
+                            {eventSearchTerm.trim() ? (
+                              <>
+                                <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                                <p>No events found matching "{eventSearchTerm}"</p>
+                                <p className="text-sm mt-2">Try searching with different keywords or clear the search to see all events</p>
+                              </>
+                            ) : (
+                              <>
+                                <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                                <p>No events created yet</p>
+                                <p className="text-sm mt-2">Create your first event to start managing photo galleries</p>
+                              </>
+                            )}
                           </TableCell>
                         </TableRow>
                       )}
@@ -1077,7 +1300,7 @@ const AdminDashboard = () => {
                                 <h3 className="text-base font-semibold text-gray-900 mb-1">{event.title}</h3>
                                 <div className="flex items-center text-sm text-gray-600 mb-2">
                                   <Calendar className="h-4 w-4 mr-1" />
-                                  {new Date(event.eventDate).toLocaleDateString()}
+                                  {new Date(event.eventDate).toLocaleDateString('en-GB')}
                                 </div>
                                 <div className="flex items-center text-sm text-gray-600 mb-2">
                                   <MapPin className="h-4 w-4 mr-1" />
@@ -1152,11 +1375,11 @@ const AdminDashboard = () => {
                                       <h4 className="font-semibold text-gray-100 mb-2">Event Details:</h4>
                                       <div className="space-y-1 text-sm text-gray-300">
                                         <div><span className="text-gray-400">Title:</span> {event.title}</div>
-                                        <div><span className="text-gray-400">Date:</span> {new Date(event.eventDate).toLocaleDateString()}</div>
+                                        <div><span className="text-gray-400">Date:</span> {new Date(event.eventDate).toLocaleDateString('en-GB')}</div>
                                         <div><span className="text-gray-400">Location:</span> {event.location}</div>
                                         <div><span className="text-gray-400">Photos:</span> {event.photoCount || 0} photos</div>
                                         <div><span className="text-gray-400">Status:</span> {event.isPrivate ? 'Private' : 'Public'}</div>
-                                        <div><span className="text-gray-400">Created:</span> {event.createdAt ? new Date(event.createdAt).toLocaleDateString() : 'N/A'}</div>
+                                        <div><span className="text-gray-400">Created:</span> {event.createdAt ? new Date(event.createdAt).toLocaleDateString('en-GB') : 'N/A'}</div>
                                       </div>
                                     </div>
                                     <p className="text-red-200 text-sm">
@@ -1188,12 +1411,127 @@ const AdminDashboard = () => {
                     ))
                   ) : (
                     <div className="text-center py-12 text-gray-500">
-                      <Calendar className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                      <p className="text-lg">No events created yet</p>
-                      <p className="text-sm mt-2">Create your first event to start managing photo galleries</p>
+                      {eventSearchTerm.trim() ? (
+                        <>
+                          <Search className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                          <p className="text-lg">No events found matching "{eventSearchTerm}"</p>
+                          <p className="text-sm mt-2">Try searching with different keywords or clear the search to see all events</p>
+                        </>
+                      ) : (
+                        <>
+                          <Calendar className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                          <p className="text-lg">No events created yet</p>
+                          <p className="text-sm mt-2">Create your first event to start managing photo galleries</p>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
+
+                {/* Pagination */}
+                {eventPagination && eventPagination.totalPages > 1 && (
+                  <div className="flex flex-col items-center space-y-4 mt-8">
+                    <div className="flex items-center justify-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEventPageChange(eventPagination.prevPage || 1)}
+                        disabled={!eventPagination.hasPrevPage}
+                        className="flex items-center gap-1"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+
+                      {/* Page Numbers */}
+                      <div className="flex items-center space-x-1">
+                        {/* First page */}
+                        {eventPagination.currentPage > 3 && (
+                          <>
+                            <Button
+                              variant={1 === eventPagination.currentPage ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handleEventPageChange(1)}
+                              className="w-10 h-10"
+                            >
+                              1
+                            </Button>
+                            {eventPagination.currentPage > 4 && <span className="px-1">...</span>}
+                          </>
+                        )}
+
+                        {/* Current page and surrounding pages */}
+                        {Array.from({ length: Math.min(5, eventPagination.totalPages) }, (_, i) => {
+                          let pageNum;
+                          if (eventPagination.totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (eventPagination.currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (eventPagination.currentPage >= eventPagination.totalPages - 2) {
+                            pageNum = eventPagination.totalPages - 4 + i;
+                          } else {
+                            pageNum = eventPagination.currentPage - 2 + i;
+                          }
+
+                          if (pageNum < 1 || pageNum > eventPagination.totalPages) return null;
+
+                          return (
+                            <Button
+                              key={pageNum}
+                              variant={pageNum === eventPagination.currentPage ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handleEventPageChange(pageNum)}
+                              className="w-10 h-10"
+                            >
+                              {pageNum}
+                            </Button>
+                          );
+                        })}
+
+                        {/* Last page */}
+                        {eventPagination.currentPage < eventPagination.totalPages - 2 && (
+                          <>
+                            {eventPagination.currentPage < eventPagination.totalPages - 3 && <span className="px-1">...</span>}
+                            <Button
+                              variant={eventPagination.totalPages === eventPagination.currentPage ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handleEventPageChange(eventPagination.totalPages)}
+                              className="w-10 h-10"
+                            >
+                              {eventPagination.totalPages}
+                            </Button>
+                          </>
+                        )}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEventPageChange(eventPagination.nextPage || eventPagination.totalPages)}
+                        disabled={!eventPagination.hasNextPage}
+                        className="flex items-center gap-1"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    {/* Pagination info */}
+                    <div className="text-sm text-gray-600 flex flex-col sm:flex-row items-center gap-2">
+                      <span>
+                        Page {eventPagination.currentPage} of {eventPagination.totalPages}
+                      </span>
+                      <span className="hidden sm:inline">•</span>
+                      <span>
+                        {eventPagination.totalEvents} total events
+                      </span>
+                      <span className="hidden sm:inline">•</span>
+                      <span>
+                        {eventPagination.limit} per page
+                      </span>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1202,35 +1540,204 @@ const AdminDashboard = () => {
           {hasPermission(userData, 'bookings') && (
             <TabsContent value="bookings" className="space-y-6">
             <Card>
-              <CardHeader className="pb-4">
-                <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
-                  <div>
-                    <CardTitle className="text-lg sm:text-xl">All Bookings</CardTitle>
-                    <CardDescription className="text-sm">Manage all event bookings and requests</CardDescription>
+              <CardHeader className="pb-4 border-b border-gray-100">
+                {/* Header Section */}
+                <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 lg:gap-6">
+                  <div className="flex-shrink-0">
+                    <CardTitle className="text-xl lg:text-2xl font-semibold text-gray-900">All Bookings</CardTitle>
+                    <CardDescription className="text-sm text-gray-600 mt-1">Manage all event bookings and requests</CardDescription>
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <div className="relative">
-                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search bookings..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-8 w-full sm:w-64"
-                      />
+                  
+                  {/* Controls Section */}
+                  <div className="flex flex-col lg:flex-row gap-3 lg:gap-4 lg:items-center">
+                    {/* Sort Controls */}
+                    <div className="flex items-center">
+                      {/* Compact Sort Controls for Desktop */}
+                      <div className="border rounded-lg p-2 bg-gray-50 lg:min-w-fit">
+                        {/* Mobile/Tablet: Vertical Layout */}
+                        <div className="block lg:hidden">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-gray-700">Sort by:</span>
+                              {(sortField !== 'createdAt' || sortDirection !== 'desc') && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={clearSort}
+                                  className="flex items-center gap-1 text-xs px-2 h-6 text-gray-500 hover:text-gray-700"
+                                >
+                                  <X className="h-3 w-3" />
+                                  Reset
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            {/* Current Sort Display */}
+                            <div className="flex items-center gap-2 p-2 bg-white rounded border-l-4 border-blue-500">
+                              <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium">1</span>
+                              <div className="flex items-center gap-1">
+                                {sortField === 'createdAt' && <Calendar className="h-3 w-3 text-gray-600" />}
+                                {sortField === 'eventDate' && <Clock className="h-3 w-3 text-gray-600" />}
+                                {sortField === 'name' && <User className="h-3 w-3 text-gray-600" />}
+                                {sortField === 'amount' && <DollarSign className="h-3 w-3 text-gray-600" />}
+                                <span className="text-sm font-medium text-gray-900">
+                                  {sortField === 'createdAt' && 'Booking Date'}
+                                  {sortField === 'eventDate' && 'Event Date'}
+                                  {sortField === 'name' && 'Client Name'}
+                                  {sortField === 'status' && 'Status'}
+                                  {sortField === 'amount' && 'Amount'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1 ml-auto">
+                                <span className="text-xs text-gray-500">
+                                  {sortDirection === 'asc' ? 'Ascending' : 'Descending'}
+                                </span>
+                                {sortDirection === 'asc' ? <ChevronUp className="h-3 w-3 text-gray-600" /> : <ChevronDown className="h-3 w-3 text-gray-600" />}
+                              </div>
+                            </div>
+
+                            {/* Sort Field Buttons */}
+                            <div className="flex flex-wrap gap-2 pt-2 border-t">
+                              <span className="text-xs text-gray-600 self-center">Click to change sort:</span>
+                              <Button
+                                variant={sortField === 'createdAt' ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => handleSort('createdAt')}
+                                className="flex items-center gap-1 text-xs h-7"
+                              >
+                                <Calendar className="h-3 w-3" />
+                                Booking Date
+                              </Button>
+                              <Button
+                                variant={sortField === 'eventDate' ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => handleSort('eventDate')}
+                                className="flex items-center gap-1 text-xs h-7"
+                              >
+                                <Clock className="h-3 w-3" />
+                                Event Date
+                              </Button>
+                              <Button
+                                variant={sortField === 'name' ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => handleSort('name')}
+                                className="flex items-center gap-1 text-xs h-7"
+                              >
+                                <User className="h-3 w-3" />
+                                Name
+                              </Button>
+                              <Button
+                                variant={sortField === 'status' ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => handleSort('status')}
+                                className="flex items-center gap-1 text-xs h-7"
+                              >
+                                Status
+                              </Button>
+                              <Button
+                                variant={sortField === 'amount' ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => handleSort('amount')}
+                                className="flex items-center gap-1 text-xs h-7"
+                              >
+                                <DollarSign className="h-3 w-3" />
+                                Amount
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Desktop: Horizontal Compact Layout */}
+                        <div className="hidden lg:flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-700">Sort:</span>
+                            <div className="flex items-center gap-1 px-2 py-1 bg-white rounded border border-blue-200">
+                              {sortField === 'createdAt' && <Calendar className="h-3 w-3 text-blue-600" />}
+                              {sortField === 'eventDate' && <Clock className="h-3 w-3 text-blue-600" />}
+                              {sortField === 'name' && <User className="h-3 w-3 text-blue-600" />}
+                              {sortField === 'amount' && <DollarSign className="h-3 w-3 text-blue-600" />}
+                              <span className="text-sm font-medium text-blue-900">
+                                {sortField === 'createdAt' && 'Booking Date'}
+                                {sortField === 'eventDate' && 'Event Date'}
+                                {sortField === 'name' && 'Name'}
+                                {sortField === 'status' && 'Status'}
+                                {sortField === 'amount' && 'Amount'}
+                              </span>
+                              {sortDirection === 'asc' ? <ChevronUp className="h-3 w-3 text-blue-600" /> : <ChevronDown className="h-3 w-3 text-blue-600" />}
+                            </div>
+                          </div>
+
+                          <div className="h-4 w-px bg-gray-300"></div>
+
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant={sortField === 'createdAt' ? "default" : "ghost"}
+                              size="sm"
+                              onClick={() => handleSort('createdAt')}
+                              className="flex items-center gap-1 text-xs h-7 px-2"
+                            >
+                              <Calendar className="h-3 w-3" />
+                              Booking Date
+                            </Button>
+                            <Button
+                              variant={sortField === 'eventDate' ? "default" : "ghost"}
+                              size="sm"
+                              onClick={() => handleSort('eventDate')}
+                              className="flex items-center gap-1 text-xs h-7 px-2"
+                            >
+                              <Clock className="h-3 w-3" />
+                              Event Date
+                            </Button>
+                            <Button
+                              variant={sortField === 'name' ? "default" : "ghost"}
+                              size="sm"
+                              onClick={() => handleSort('name')}
+                              className="flex items-center gap-1 text-xs h-7 px-2"
+                            >
+                              <User className="h-3 w-3" />
+                              Name
+                            </Button>
+                            <Button
+                              variant={sortField === 'status' ? "default" : "ghost"}
+                              size="sm"
+                              onClick={() => handleSort('status')}
+                              className="flex items-center gap-1 text-xs h-7 px-2"
+                            >
+                              Status
+                            </Button>
+                            <Button
+                              variant={sortField === 'amount' ? "default" : "ghost"}
+                              size="sm"
+                              onClick={() => handleSort('amount')}
+                              className="flex items-center gap-1 text-xs h-7 px-2"
+                            >
+                              <DollarSign className="h-3 w-3" />
+                              Amount
+                            </Button>
+                          </div>
+
+                          {(sortField !== 'createdAt' || sortDirection !== 'desc') && (
+                            <>
+                              <div className="h-4 w-px bg-gray-300"></div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={clearSort}
+                                className="flex items-center gap-1 text-xs px-2 h-7 text-gray-500 hover:text-gray-700"
+                              >
+                                <X className="h-3 w-3" />
+                                Reset
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Select value={statusFilter} onValueChange={setStatusFilter}>
-                        <SelectTrigger className="w-32">
-                          <Filter className="h-4 w-4 mr-2" />
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Status</SelectItem>
-                          <SelectItem value="pending">Pending</SelectItem>
-                          <SelectItem value="confirmed">Confirmed</SelectItem>
-                          <SelectItem value="cancelled">Cancelled</SelectItem>
-                        </SelectContent>
-                      </Select>
+
+                    {/* Create New Booking Button */}
+                    <div className="flex items-center">
                       <CreateBookingDialog onBookingCreated={() => {
                         console.log('Booking created from bookings tab, refreshing data...');
                         const refreshData = async () => {
@@ -1251,16 +1758,57 @@ const AdminDashboard = () => {
                 </div>
               </CardHeader>
               <CardContent>
+                {/* Search and Filter Controls */}
+                <div className="mb-4 border-b border-gray-100 pb-4">
+                  <div className="flex flex-col sm:flex-row gap-3 lg:items-center">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                      <Input
+                        placeholder="Search bookings..."
+                        value={searchTerm}
+                        onChange={(e) => {
+                          setSearchTerm(e.target.value);
+                          setBookingCurrentPage(1); // Reset to first page on search
+                        }}
+                        className="pl-10 w-full sm:w-64 h-10 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                      />
+                    </div>
+                    
+                    <Select value={statusFilter} onValueChange={(value) => {
+                      setStatusFilter(value);
+                      setBookingCurrentPage(1); // Reset to first page on filter change
+                    }}>
+                      <SelectTrigger className="w-full sm:w-36 h-10 border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                        <Filter className="h-4 w-4 mr-2 text-gray-500" />
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="confirmed">Confirmed</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
                 {/* Results Summary */}
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex justify-between items-center mb-3 lg:mb-4">
                   <p className="text-sm text-gray-600">
-                    Showing {getSortedAndFilteredBookings().length} of {bookings.length} bookings
+                    {paginatedBookings.length > 0 ? (
+                      <>
+                        Showing {((bookingCurrentPage - 1) * bookingItemsPerPage) + 1}–{Math.min(bookingCurrentPage * bookingItemsPerPage, sortedAndFilteredBookings.length)} of {sortedAndFilteredBookings.length} bookings
+                        {sortedAndFilteredBookings.length !== bookings.length && ` (filtered from ${bookings.length} total)`}
+                      </>
+                    ) : (
+                      `No bookings found${sortedAndFilteredBookings.length !== bookings.length ? ` (filtered from ${bookings.length} total)` : ''}`
+                    )}
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {getSortedAndFilteredBookings().length > 0 ? (
-                    getSortedAndFilteredBookings().map((booking) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
+                  {paginatedBookings.length > 0 ? (
+                    paginatedBookings.map((booking) => (
                       <Card key={booking.id} className="relative hover:shadow-lg transition-shadow">
                         <CardHeader className="pb-4">
                           <div className="flex justify-between items-start">
@@ -1274,7 +1822,7 @@ const AdminDashboard = () => {
                               </div>
                               <div className="flex items-center text-sm text-gray-600 mb-2">
                                 <Clock className="h-4 w-4 mr-1" />
-                                {new Date(booking.eventDate).toLocaleDateString()}
+                                {new Date(booking.eventDate).toLocaleDateString('en-GB')} {booking.eventTime && `at ${booking.eventTime}`}
                               </div>
                               {booking.location && (
                                 <div className="flex items-center text-sm text-gray-600 mb-2">
@@ -1282,6 +1830,10 @@ const AdminDashboard = () => {
                                   {booking.location}
                                 </div>
                               )}
+                              <div className="flex items-center text-sm text-gray-500 mb-2">
+                                <Calendar className="h-4 w-4 mr-1" />
+                                Booked: {new Date(booking.createdAt).toLocaleDateString('en-GB')} at {new Date(booking.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                              </div>
                             </div>
                           </div>
                         </CardHeader>
@@ -1370,7 +1922,7 @@ const AdminDashboard = () => {
                                       <div className="space-y-1 text-sm text-gray-300">
                                         <div><span className="text-gray-400">Client:</span> {booking.name || 'Unknown'}</div>
                                         <div><span className="text-gray-400">Event Type:</span> {booking.eventType}</div>
-                                        <div><span className="text-gray-400">Date:</span> {new Date(booking.eventDate).toLocaleDateString()}</div>
+                                        <div><span className="text-gray-400">Date:</span> {new Date(booking.eventDate).toLocaleDateString('en-GB')}</div>
                                         {booking.location && <div><span className="text-gray-400">Location:</span> {booking.location}</div>}
                                         <div><span className="text-gray-400">Status:</span> <span className={
                                           booking.status === 'confirmed' ? 'text-green-400' :
@@ -1379,7 +1931,6 @@ const AdminDashboard = () => {
                                         <div><span className="text-gray-400">Amount:</span> ₹{booking.amount || 0}</div>
                                         {booking.email && <div><span className="text-gray-400">Email:</span> {booking.email}</div>}
                                         {booking.phone && <div><span className="text-gray-400">Phone:</span> {booking.phone}</div>}
-                                        <div><span className="text-gray-400">Booked:</span> {booking.createdAt ? new Date(booking.createdAt).toLocaleDateString() : 'N/A'}</div>
                                       </div>
                                     </div>
                                     <p className="text-red-200 text-sm">
@@ -1442,6 +1993,102 @@ const AdminDashboard = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Booking Pagination */}
+                {bookingPagination.totalPages > 1 && (
+                  <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6 pt-6 border-t">
+                    {/* Pagination Controls */}
+                    <div className="flex items-center gap-2 overflow-x-auto">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleBookingPageChange(bookingPagination.prevPage || 1)}
+                        disabled={!bookingPagination.hasPrevPage}
+                        className="flex items-center gap-1"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+
+                      <div className="flex items-center gap-1">
+                        {/* First page */}
+                        {bookingPagination.currentPage > 2 && (
+                          <>
+                            <Button
+                              variant={1 === bookingPagination.currentPage ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handleBookingPageChange(1)}
+                              className="w-10 h-10"
+                            >
+                              1
+                            </Button>
+                            {bookingPagination.currentPage > 3 && <span className="px-1">...</span>}
+                          </>
+                        )}
+
+                        {/* Current page and neighbors */}
+                        {Array.from({ length: 3 }, (_, i) => {
+                          const page = bookingPagination.currentPage - 1 + i;
+                          if (page >= 1 && page <= bookingPagination.totalPages) {
+                            return (
+                              <Button
+                                key={page}
+                                variant={page === bookingPagination.currentPage ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => handleBookingPageChange(page)}
+                                className="w-10 h-10"
+                              >
+                                {page}
+                              </Button>
+                            );
+                          }
+                          return null;
+                        })}
+
+                        {/* Last page */}
+                        {bookingPagination.currentPage < bookingPagination.totalPages - 2 && (
+                          <>
+                            {bookingPagination.currentPage < bookingPagination.totalPages - 3 && <span className="px-1">...</span>}
+                            <Button
+                              variant={bookingPagination.totalPages === bookingPagination.currentPage ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handleBookingPageChange(bookingPagination.totalPages)}
+                              className="w-10 h-10"
+                            >
+                              {bookingPagination.totalPages}
+                            </Button>
+                          </>
+                        )}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleBookingPageChange(bookingPagination.nextPage || bookingPagination.totalPages)}
+                        disabled={!bookingPagination.hasNextPage}
+                        className="flex items-center gap-1"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    {/* Pagination info */}
+                    <div className="text-sm text-gray-600 flex flex-col sm:flex-row items-center gap-2">
+                      <span>
+                        Page {bookingPagination.currentPage} of {bookingPagination.totalPages}
+                      </span>
+                      <span className="hidden sm:inline">•</span>
+                      <span>
+                        {bookingPagination.totalItems} total bookings
+                      </span>
+                      <span className="hidden sm:inline">•</span>
+                      <span>
+                        {bookingPagination.itemsPerPage} per page
+                      </span>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1669,7 +2316,7 @@ const AdminDashboard = () => {
                               </CardTitle>
                               <div className="flex items-center text-sm text-gray-600 mb-2">
                                 <Clock className="h-4 w-4 mr-1 flex-shrink-0" />
-                                {new Date(message.createdAt).toLocaleDateString()}
+                                {new Date(message.createdAt).toLocaleDateString('en-GB')}
                               </div>
                               <div className="flex items-center text-sm text-gray-600 mb-2">
                                 <Mail className="h-4 w-4 mr-1 flex-shrink-0" />
@@ -1778,6 +2425,7 @@ const AdminDashboard = () => {
               <QRManagement />
             </TabsContent>
           )}
+
 
           {hasPermission(userData, 'storage') && (
             <TabsContent value="storage" className="space-y-6">
@@ -2038,7 +2686,7 @@ const AdminDashboard = () => {
                         <Calendar className="h-4 w-4 text-gray-500" />
                         <span className="font-medium text-sm text-gray-600">Date:</span>
                       </div>
-                      <span>{new Date(selectedBooking.eventDate).toLocaleDateString()}</span>
+                      <span>{new Date(selectedBooking.eventDate).toLocaleDateString('en-GB')}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">

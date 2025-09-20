@@ -24,15 +24,22 @@ export default defineConfig({
     },
   },
   root: path.resolve(import.meta.dirname, "client"),
+  envDir: import.meta.dirname,
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: path.resolve(import.meta.dirname, "client/index.html")
+      }
+    }
   },
+  publicDir: path.resolve(import.meta.dirname, "client/public"),
   server: {
     hmr: {
       overlay: false, // disables Vite's built-in overlay
     },
-    // Completely disable error overlay
-    overlay: false,
+    host: '0.0.0.0',
+    port: 5173,
   },
 });

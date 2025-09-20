@@ -23,6 +23,7 @@ interface UploadFile {
   status: 'pending' | 'uploading' | 'completed' | 'error';
   url?: string;
   error?: string;
+  jobId?: string; // For async uploads
 }
 
 export function PhotoUploadDialog({ 
@@ -53,45 +54,91 @@ export function PhotoUploadDialog({
     setHasWakeLockSupport('wakeLock' in navigator);
   }, []);
 
-  // Load persisted upload state on mount
+  // Clear persisted upload state on page refresh to prevent errors
   useEffect(() => {
-    const loadPersistedState = () => {
+    const clearStateOnRefresh = () => {
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
+          // Check if page was refreshed by looking for navigation type
+          const navigationEntry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+          const isPageRefresh = navigationEntry?.type === 'reload';
+          
+          if (isPageRefresh) {
+            // Automatically clear localStorage on page refresh to prevent errors
+            clearPersistedState();
+            console.log('Upload state cleared due to page refresh');
+            return;
+          }
+
+          // Only attempt to load persisted state if not a page refresh
           const { files, uploading } = JSON.parse(saved);
-          if (files && files.length > 0) {
-            setUploadFiles(files);
-            if (uploading) {
-              toast({
-                title: "Upload resumed",
-                description: `Found ${files.length} photos from previous session. Continue uploading?`,
-                action: (
-                  <Button 
-                    size="sm" 
-                    onClick={() => {
-                      // Reset pending files and restart upload
-                      const pendingFiles = files.map((f: UploadFile) => 
-                        f.status === 'uploading' ? { ...f, status: 'pending' } : f
-                      );
-                      setUploadFiles(pendingFiles);
-                      handleUploadAll();
-                    }}
-                  >
-                    Resume
-                  </Button>
-                )
-              });
+          if (files && files.length > 0 && Array.isArray(files)) {
+            // Validate that files have the required structure
+            const validStatuses = ['pending', 'uploading', 'completed', 'error'] as const;
+            const validFiles = files.filter((f: any) => 
+              f && f.file && f.id && validStatuses.includes(f.status) && typeof f.progress === 'number'
+            ) as UploadFile[];
+            
+            if (validFiles.length > 0) {
+              setUploadFiles(validFiles);
+              if (uploading) {
+                toast({
+                  title: "Upload resumed",
+                  description: `Found ${validFiles.length} photos from previous session. Continue uploading or clear them?`,
+                  action: (
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        onClick={() => {
+                          // Reset pending files and restart upload
+                          const pendingFiles = validFiles.map((f: UploadFile) => 
+                            f.status === 'uploading' ? { ...f, status: 'pending' as const } : f
+                          );
+                          setUploadFiles(pendingFiles);
+                          handleUploadAll();
+                        }}
+                      >
+                        Resume
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => {
+                          clearPersistedState();
+                          setUploadFiles([]);
+                          toast({
+                            title: "Cleared",
+                            description: "Previous upload session cleared."
+                          });
+                        }}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  )
+                });
+              }
+            } else {
+              // Invalid data, clear it
+              clearPersistedState();
             }
           }
         }
       } catch (error) {
-        console.error('Failed to load persisted upload state:', error);
+        console.error('Failed to handle persisted upload state:', error);
+        // Clear corrupted data
+        clearPersistedState();
+        toast({
+          title: "Upload state cleared",
+          description: "Previous upload session data was corrupted and has been cleared.",
+          variant: "default"
+        });
       }
     };
 
     if (eventId && isOpen) {
-      loadPersistedState();
+      clearStateOnRefresh();
     }
   }, [eventId, isOpen]);
 
@@ -236,7 +283,7 @@ export function PhotoUploadDialog({
     }
 
     // Warn user for large uploads with estimated time
-    if (imageFiles.length > 50) {
+    if (imageFiles.length > 100) {
       const estimatedTime = optimizer.estimateUploadTime(imageFiles);
       toast({
         title: "Large upload detected",
@@ -316,14 +363,35 @@ export function PhotoUploadDialog({
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
               const result = JSON.parse(xhr.responseText);
-              updateUploadFiles(prev => prev.map(f => 
-                f.id === uploadFile.id ? { 
-                  ...f, 
-                  status: 'completed' as const, 
-                  url: result.url,
-                  progress: 100 
-                } : f
-              ));
+              
+              // Check if this is an async upload response
+              if (result.async && result.jobId) {
+                // For async uploads, mark as completed but show job status
+                updateUploadFiles(prev => prev.map(f => 
+                  f.id === uploadFile.id ? { 
+                    ...f, 
+                    status: 'completed' as const, 
+                    jobId: result.jobId,
+                    progress: 100 
+                  } : f
+                ));
+                
+                // Show async upload notification
+                toast({
+                  title: "Large upload processing",
+                  description: `Your ${result.totalFiles} photos are being processed in the background. Job ID: ${result.jobId}`,
+                });
+              } else {
+                // Normal upload completion
+                updateUploadFiles(prev => prev.map(f => 
+                  f.id === uploadFile.id ? { 
+                    ...f, 
+                    status: 'completed' as const, 
+                    url: result.url,
+                    progress: 100 
+                  } : f
+                ));
+              }
               resolve();
             } catch (error) {
               reject(new Error('Invalid response format'));

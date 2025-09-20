@@ -167,18 +167,34 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
     
     setLoadingPhotos(true);
     try {
-      const response = await fetch(`/api/events/${event.id}/photos?limit=500`);
-      if (response.ok) {
-        const data = await response.json();
-        // Handle both new paginated format and old direct array format
-        if (data.photos && Array.isArray(data.photos)) {
-          setPhotos(data.photos);
-        } else if (Array.isArray(data)) {
-          setPhotos(data);
+      let allPhotos: Photo[] = [];
+      let currentPage = 1;
+      let hasMore = true;
+      const limit = 500; // Fetch 500 photos per request
+      
+      // Fetch all photos by making multiple paginated requests
+      while (hasMore) {
+        const response = await fetch(`/api/events/${event.id}/photos?page=${currentPage}&limit=${limit}`);
+        if (response.ok) {
+          const data = await response.json();
+          // Handle both new paginated format and old direct array format
+          if (data.photos && Array.isArray(data.photos)) {
+            allPhotos = [...allPhotos, ...data.photos];
+            hasMore = data.hasMore || false;
+            currentPage++;
+          } else if (Array.isArray(data)) {
+            // Fallback for old API format
+            allPhotos = [...allPhotos, ...data];
+            hasMore = false;
+          } else {
+            hasMore = false;
+          }
         } else {
-          setPhotos([]);
+          hasMore = false;
         }
       }
+      
+      setPhotos(allPhotos);
     } catch (error) {
       console.error('Error loading photos:', error);
       toast({
@@ -526,7 +542,7 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
                     ) : (
                       <p className="mt-1 text-sm text-gray-600 flex items-center">
                         <Calendar className="h-4 w-4 mr-2" />
-                        {new Date(event.eventDate).toLocaleDateString()}
+                        {new Date(event.eventDate).toLocaleDateString('en-GB')}
                       </p>
                     )}
                   </div>
@@ -647,11 +663,11 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
                     </div>
                     <div className="flex items-center justify-between text-sm mt-2">
                       <span className="text-gray-500">Created:</span>
-                      <span className="text-gray-600">{new Date(event.createdAt).toLocaleDateString()}</span>
+                      <span className="text-gray-600">{new Date(event.createdAt).toLocaleDateString('en-GB')}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm mt-1">
                       <span className="text-gray-500">Updated:</span>
-                      <span className="text-gray-600">{new Date(event.updatedAt).toLocaleDateString()}</span>
+                      <span className="text-gray-600">{new Date(event.updatedAt).toLocaleDateString('en-GB')}</span>
                     </div>
                   </div>
                 </CardContent>

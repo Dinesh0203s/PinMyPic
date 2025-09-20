@@ -74,8 +74,6 @@ export const getAvailableTabs = (user: User | null): { value: string; label: str
     { value: 'messages', label: 'Messages', permission: 'contacts' },
     { value: 'users', label: 'Users', permission: 'users' },
     { value: 'qr', label: 'QR Codes', permission: 'qr_codes' },
-
-
     { value: 'storage', label: 'Storage', permission: 'storage' },
   ];
 

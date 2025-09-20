@@ -371,7 +371,7 @@ export function EditableEventRow({ event, onEventUpdated, onViewEvent }: Editabl
       <TableCell>
         <div className="flex items-center gap-2 text-sm">
           <Calendar className="h-4 w-4 text-gray-500" />
-          {new Date(event.eventDate).toLocaleDateString()}
+          {new Date(event.eventDate).toLocaleDateString('en-GB')}
         </div>
       </TableCell>
       <TableCell>

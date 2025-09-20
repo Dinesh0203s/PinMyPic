@@ -321,7 +321,7 @@ export function AdminUsersManagement({ currentUser }: AdminUsersManagementProps)
                           <TableCell>
                             <div className="flex items-center gap-1 text-sm text-gray-500">
                               <Calendar className="w-3 h-3" />
-                              {new Date(user.createdAt).toLocaleDateString()}
+                              {new Date(user.createdAt).toLocaleDateString('en-GB')}
                             </div>
                           </TableCell>
                           {isOwner && (
@@ -456,7 +456,7 @@ export function AdminUsersManagement({ currentUser }: AdminUsersManagementProps)
                         {/* Join Date */}
                         <div className="text-xs text-gray-500 flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
-                          Joined {new Date(user.createdAt).toLocaleDateString()}
+                          Joined {new Date(user.createdAt).toLocaleDateString('en-GB')}
                         </div>
 
                         {/* Actions */}
@@ -594,7 +594,7 @@ export function AdminUsersManagement({ currentUser }: AdminUsersManagementProps)
                           <TableCell>
                             <div className="flex items-center gap-1 text-sm text-gray-500">
                               <Calendar className="w-3 h-3" />
-                              {new Date(user.createdAt).toLocaleDateString()}
+                              {new Date(user.createdAt).toLocaleDateString('en-GB')}
                             </div>
                           </TableCell>
                           {isOwner && (
@@ -663,7 +663,7 @@ export function AdminUsersManagement({ currentUser }: AdminUsersManagementProps)
                         {/* Admin Since */}
                         <div className="text-xs text-gray-500 flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
-                          Admin since {new Date(user.createdAt).toLocaleDateString()}
+                          Admin since {new Date(user.createdAt).toLocaleDateString('en-GB')}
                         </div>
 
                         {/* Actions */}

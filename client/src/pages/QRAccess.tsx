@@ -342,7 +342,7 @@ const QRAccess: React.FC = () => {
                 </h1>
                 <h2 className="text-xl text-gray-600 mb-2">{event.title}</h2>
                 <p className="text-gray-500">
-                  {new Date(event.eventDate).toLocaleDateString()} • {event.location}
+                  {new Date(event.eventDate).toLocaleDateString('en-GB')} • {event.location}
                 </p>
               </div>
 

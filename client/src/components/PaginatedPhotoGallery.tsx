@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Eye, Download, Heart, HeartOff, Loader2, ChevronLeft, ChevronRight, ImageIcon } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, ImageIcon } from 'lucide-react';
 import ProgressiveImage from './ProgressiveImage';
 import { Photo } from '@shared/types';
 import { useAuth } from '@/contexts/AuthContext';
@@ -115,23 +115,6 @@ const PaginatedPhotoGallery: React.FC<PaginatedPhotoGalleryProps> = ({
     setRevealedPhotos(new Set(currentPhotos.map(photo => photo.id)));
   }, [currentPhotos]);
 
-  const handleDownload = async (photo: Photo, e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      const response = await fetch(`${photo.url}?download=true`);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = photo.filename || 'photo';
-      document.body.appendChild(link);
-      link.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error('Error downloading photo:', error);
-    }
-  };
 
   const scrollToTop = () => {
     // Immediate scroll to top
@@ -203,18 +186,11 @@ const PaginatedPhotoGallery: React.FC<PaginatedPhotoGalleryProps> = ({
             key={photo.id}
             photo={photo}
             onPhotoClick={onPhotoClick}
-            onDownload={handleDownload}
             onLoad={() => handlePhotoLoad(photo.id, index)}
             onError={() => handlePhotoError(photo.id, index)}
             loaded={loadedPhotos.has(photo.id)}
             error={errorPhotos.has(photo.id)}
             visible={revealedPhotos.has(photo.id)}
-            showSaveToProfile={showSaveToProfile}
-            savedPhotoIds={savedPhotoIds}
-            onSavePhoto={onSavePhoto}
-            onRemovePhoto={onRemovePhoto}
-            savingPhotoIds={savingPhotoIds}
-            currentUser={currentUser}
           />
         ))}
       </div>
@@ -331,58 +307,30 @@ const PaginatedPhotoGallery: React.FC<PaginatedPhotoGalleryProps> = ({
 interface PhotoCardProps {
   photo: Photo;
   onPhotoClick?: (photo: Photo) => void;
-  onDownload: (photo: Photo, e: React.MouseEvent) => void;
   onLoad: () => void;
   onError: () => void;
   loaded: boolean;
   error: boolean;
   visible: boolean;
-  showSaveToProfile: boolean;
-  savedPhotoIds: string[];
-  onSavePhoto?: (photoId: string) => void;
-  onRemovePhoto?: (photoId: string) => void;
-  savingPhotoIds: string[];
-  currentUser: any;
 }
 
 const PhotoCard: React.FC<PhotoCardProps> = ({
   photo,
   onPhotoClick,
-  onDownload,
   onLoad,
   onError,
   loaded,
   error,
-  visible,
-  showSaveToProfile,
-  savedPhotoIds,
-  onSavePhoto,
-  onRemovePhoto,
-  savingPhotoIds,
-  currentUser
+  visible
 }) => {
-  const handleSaveToProfile = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onSavePhoto) {
-      onSavePhoto(photo.id);
-    }
-  };
-
-  const handleRemoveFromProfile = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onRemovePhoto) {
-      onRemovePhoto(photo.id);
-    }
-  };
-
-  const isPhotoSaved = savedPhotoIds.includes(photo.id);
-  const isPhotoSaving = savingPhotoIds.includes(photo.id);
-  const canShowSaveButton = showSaveToProfile && currentUser;
 
   return (
-    <Card className={`group hover:shadow-xl transition-all duration-300 hover:scale-105 overflow-hidden cursor-pointer ${
-      visible ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4'
-    } transition-all duration-500`}>
+    <Card 
+      className={`group hover:shadow-xl transition-all duration-300 hover:scale-105 overflow-hidden cursor-pointer ${
+        visible ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4'
+      } transition-all duration-500`}
+      onClick={() => onPhotoClick?.(photo)}
+    >
       <CardContent className="p-0 aspect-square relative">
         {/* Loading skeleton */}
         {!loaded && !error && (
@@ -412,61 +360,6 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
           loading="lazy"
         />
         
-        {/* Hover overlay - Mobile friendly */}
-        <div 
-          className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 md:transition-all md:duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100 active:opacity-100 touch-manipulation"
-          onClick={(e) => {
-            // On mobile, first tap shows overlay, second tap opens photo
-            if (window.innerWidth <= 768) {
-              e.preventDefault();
-              e.stopPropagation();
-            }
-          }}
-        >
-          <div className="flex space-x-1 md:space-x-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="bg-white/90 hover:bg-white p-2 md:p-2"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('Eye icon clicked for photo:', photo.id);
-                // Use setTimeout to ensure the event is processed after the current stack
-                setTimeout(() => {
-                  onPhotoClick?.(photo);
-                }, 0);
-              }}
-            >
-              <Eye className="h-3 w-3 md:h-4 md:w-4" />
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="bg-white/90 hover:bg-white p-2 md:p-2"
-              onClick={(e) => onDownload(photo, e)}
-            >
-              <Download className="h-3 w-3 md:h-4 md:w-4" />
-            </Button>
-            {canShowSaveButton && (
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`bg-white/90 hover:bg-white p-2 md:p-2 ${isPhotoSaved ? 'text-red-500' : 'text-green-500'}`}
-                onClick={isPhotoSaved ? handleRemoveFromProfile : handleSaveToProfile}
-                disabled={isPhotoSaving}
-              >
-                {isPhotoSaving ? (
-                  <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" />
-                ) : isPhotoSaved ? (
-                  <HeartOff className="h-3 w-3 md:h-4 md:w-4" />
-                ) : (
-                  <Heart className="h-3 w-3 md:h-4 md:w-4" />
-                )}
-              </Button>
-            )}
-          </div>
-        </div>
         
         {/* Loading indicator for individual photos */}
         {!loaded && !error && (

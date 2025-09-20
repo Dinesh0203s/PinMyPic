@@ -1,7 +1,6 @@
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Calendar, Lock, Users, Camera, Search, MapPin, Eye, X, Upload, Scan, Download, Unlock, Video, VideoOff, ChevronLeft, ChevronRight, Share2, Copy, ExternalLink, Check, Archive } from 'lucide-react';
-import { SiWhatsapp } from 'react-icons/si';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -29,6 +28,22 @@ const Events = () => {
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalEvents, setTotalEvents] = useState(0);
+  const [eventsPerPage] = useState(12);
+  const [sortBy, setSortBy] = useState('eventDate');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [pagination, setPagination] = useState<{
+    currentPage: number;
+    totalPages: number;
+    totalEvents: number;
+    limit: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+    nextPage: number | null;
+    prevPage: number | null;
+  } | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
   const [faceScanDialogOpen, setFaceScanDialogOpen] = useState(false);
@@ -174,13 +189,6 @@ const Events = () => {
     }
   };
 
-  const shareOnWhatsApp = () => {
-    if (shareUrl && shareEvent) {
-      const message = `Check out this event: ${shareEvent.title}\n\n${shareUrl}`;
-      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-      window.open(whatsappUrl, '_blank');
-    }
-  };
 
   // Download all photos as zip with optimizations
   const downloadAllPhotos = async () => {
@@ -362,29 +370,54 @@ const Events = () => {
 
 
 
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        // Fetch all events from lightweight endpoint
-        const response = await fetch('/api/events/all');
-        if (response.ok) {
-          const data = await response.json();
-          setEvents(data);
+  const fetchEvents = useCallback(async (page = 1, search = '', sort = sortBy, order = sortOrder) => {
+    try {
+      setLoading(true);
+      
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: eventsPerPage.toString(),
+        search: search.trim(),
+        sortBy: sort,
+        sortOrder: order
+      });
+      
+      const response = await fetch(`/api/events/all?${params}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.events && data.pagination) {
+          // New paginated API response
+          setEvents(data.events);
+          setPagination(data.pagination);
+          setCurrentPage(data.pagination.currentPage);
+          setTotalPages(data.pagination.totalPages);
+          setTotalEvents(data.pagination.totalEvents);
         } else {
-          // Fallback to admin endpoint if new endpoint doesn't exist yet
-          const fallbackResponse = await fetch('/api/admin/events');
-          if (fallbackResponse.ok) {
-            const data = await fallbackResponse.json();
-            setEvents(data);
-          }
+          // Fallback for old API response format
+          setEvents(Array.isArray(data) ? data : []);
+          setCurrentPage(1);
+          setTotalPages(1);
+          setTotalEvents(Array.isArray(data) ? data.length : 0);
         }
-      } catch (error) {
-        console.error('Error fetching events:', error);
-      } finally {
-        setLoading(false);
+      } else {
+        // Fallback to admin endpoint if new endpoint doesn't exist yet
+        const fallbackResponse = await fetch('/api/admin/events');
+        if (fallbackResponse.ok) {
+          const data = await fallbackResponse.json();
+          setEvents(data);
+          setCurrentPage(1);
+          setTotalPages(1);
+          setTotalEvents(data.length);
+        }
       }
-    };
+    } catch (error) {
+      console.error('Error fetching events:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [eventsPerPage, sortBy, sortOrder]);
 
+  useEffect(() => {
     // Check if we need direct access (URL or QR)
     const searchParams = new URLSearchParams(location.search);
     const qrEventId = searchParams.get('eventId');
@@ -397,10 +430,10 @@ const Events = () => {
       // QR-based access - fetch only this event and show face scan dialog immediately  
       fetchSingleEventForDirectAccess(qrEventId, 'qr');
     } else {
-      // Normal events page - fetch all events
-      fetchEvents();
+      // Normal events page - fetch paginated events
+      fetchEvents(currentPage, debouncedSearchTerm, sortBy, sortOrder);
     }
-  }, [urlEventId, location.search]);
+  }, [urlEventId, location.search, fetchEvents, currentPage, debouncedSearchTerm, sortBy, sortOrder]);
 
   // Fetch single event for direct access (URL or QR)
   const fetchSingleEventForDirectAccess = async (eventId: string, accessType: 'url' | 'qr') => {
@@ -652,22 +685,17 @@ const Events = () => {
     }
   }, [events, loading]);
 
-  // Removed upload photo search - only selfie mode is available
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
-  const filteredEvents = useMemo(() => {
-    // First filter out hidden events (handle undefined isHidden as false)
-    const visibleEvents = events.filter(event => event.isHidden !== true);
-    
-    // Then apply search filter if search term exists
-    if (!debouncedSearchTerm.trim()) return visibleEvents;
-    
-    const lowercaseSearch = debouncedSearchTerm.toLowerCase();
-    return visibleEvents.filter(event =>
-      event.title.toLowerCase().includes(lowercaseSearch) ||
-      event.location.toLowerCase().includes(lowercaseSearch) ||
-      event.category.toLowerCase().includes(lowercaseSearch)
-    );
-  }, [events, debouncedSearchTerm]);
+  const handleSortChange = (newSortBy: string, newSortOrder: string = sortOrder) => {
+    setSortBy(newSortBy);
+    setSortOrder(newSortOrder);
+    setCurrentPage(1); // Reset to first page when sorting changes
+  };
 
   const handleEventAccess = async (event: Event) => {
     setSelectedEvent(event);
@@ -755,22 +783,40 @@ const Events = () => {
   const loadEventPhotos = async (eventId: string, page: number = 1) => {
     setLoadingPhotos(true);
     try {
-      const response = await fetch(`/api/events/${eventId}/photos?page=${page}&limit=500&lightweight=true`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.photos) {
-          setPhotos(data.photos);
-          
-          // Preload first 10 images for better performance
-          const imageUrls = data.photos.slice(0, 10).map((photo: any) => photo.url);
-          if (imageUrls.length > 0) {
-            import('@/utils/imagePreloader').then(({ imagePreloader }) => {
-              imagePreloader.preloadBatch(imageUrls, 3);
-            });
+      let allPhotos: Photo[] = [];
+      let currentPage = 1;
+      let hasMore = true;
+      const limit = 500; // Fetch 500 photos per request
+      
+      // Fetch all photos by making multiple paginated requests
+      while (hasMore) {
+        const response = await fetch(`/api/events/${eventId}/photos?page=${currentPage}&limit=${limit}&lightweight=true`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.photos && Array.isArray(data.photos)) {
+            allPhotos = [...allPhotos, ...data.photos];
+            hasMore = data.hasMore || false;
+            currentPage++;
+          } else {
+            // Fallback for old API format
+            if (Array.isArray(data)) {
+              allPhotos = [...allPhotos, ...data];
+            }
+            hasMore = false;
           }
         } else {
-          setPhotos(data); // Fallback for old API format
+          hasMore = false;
         }
+      }
+      
+      setPhotos(allPhotos);
+      
+      // Preload first 10 images for better performance
+      const imageUrls = allPhotos.slice(0, 10).map((photo: any) => photo.url);
+      if (imageUrls.length > 0) {
+        import('@/utils/imagePreloader').then(({ imagePreloader }) => {
+          imagePreloader.preloadBatch(imageUrls, 3);
+        });
       }
     } catch (error) {
       console.error('Error loading photos:', error);
@@ -1009,7 +1055,7 @@ const Events = () => {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
-                    {filteredEvents.map((event) => (
+                    {events.map((event: Event) => (
                 <Card key={event.id} className="group hover:shadow-xl transition-all duration-300 hover:scale-105 overflow-hidden">
                   <div className="relative overflow-hidden bg-gray-100">
                     <img 
@@ -1051,7 +1097,7 @@ const Events = () => {
                     <div className="space-y-2 mb-4">
                       <div className="flex items-center text-gray-600">
                         <Calendar className="h-4 w-4 mr-2" />
-                        <span className="text-sm">{new Date(event.eventDate).toLocaleDateString()}</span>
+                        <span className="text-sm">{new Date(event.eventDate).toLocaleDateString('en-GB')}</span>
                       </div>
                       <div className="flex items-center text-gray-600">
                         <MapPin className="h-4 w-4 mr-2" />
@@ -1102,11 +1148,116 @@ const Events = () => {
                   </div>
                 )}
 
-                {!loading && filteredEvents.length === 0 && (
+                {!loading && events.length === 0 && (
                   <div className="text-center py-16">
                     <Camera className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-xl font-semibold text-gray-600 mb-2">No events found</h3>
                     <p className="text-gray-500">Try adjusting your search terms</p>
+                  </div>
+                )}
+
+                {/* Pagination */}
+                {!loading && pagination && pagination.totalPages > 1 && (
+                  <div className="flex flex-col items-center space-y-4 mt-8">
+                    <div className="flex items-center justify-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(pagination.prevPage || 1)}
+                        disabled={!pagination.hasPrevPage}
+                        className="flex items-center gap-1"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+
+                      {/* Page Numbers */}
+                      <div className="flex items-center space-x-1">
+                        {/* First page */}
+                        {pagination.currentPage > 3 && (
+                          <>
+                            <Button
+                              variant={1 === pagination.currentPage ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handlePageChange(1)}
+                              className="w-10 h-10"
+                            >
+                              1
+                            </Button>
+                            {pagination.currentPage > 4 && <span className="px-1">...</span>}
+                          </>
+                        )}
+
+                        {/* Current page and surrounding pages */}
+                        {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                          let pageNum;
+                          if (pagination.totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (pagination.currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (pagination.currentPage >= pagination.totalPages - 2) {
+                            pageNum = pagination.totalPages - 4 + i;
+                          } else {
+                            pageNum = pagination.currentPage - 2 + i;
+                          }
+
+                          if (pageNum < 1 || pageNum > pagination.totalPages) return null;
+
+                          return (
+                            <Button
+                              key={pageNum}
+                              variant={pageNum === pagination.currentPage ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handlePageChange(pageNum)}
+                              className="w-10 h-10"
+                            >
+                              {pageNum}
+                            </Button>
+                          );
+                        })}
+
+                        {/* Last page */}
+                        {pagination.currentPage < pagination.totalPages - 2 && (
+                          <>
+                            {pagination.currentPage < pagination.totalPages - 3 && <span className="px-1">...</span>}
+                            <Button
+                              variant={pagination.totalPages === pagination.currentPage ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handlePageChange(pagination.totalPages)}
+                              className="w-10 h-10"
+                            >
+                              {pagination.totalPages}
+                            </Button>
+                          </>
+                        )}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(pagination.nextPage || pagination.totalPages)}
+                        disabled={!pagination.hasNextPage}
+                        className="flex items-center gap-1"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    {/* Pagination info */}
+                    <div className="text-sm text-gray-600 flex flex-col sm:flex-row items-center gap-2">
+                      <span>
+                        Page {pagination.currentPage} of {pagination.totalPages}
+                      </span>
+                      <span className="hidden sm:inline">•</span>
+                      <span>
+                        {pagination.totalEvents} total events
+                      </span>
+                      <span className="hidden sm:inline">•</span>
+                      <span>
+                        {pagination.limit} per page
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1371,14 +1522,6 @@ const Events = () => {
                     </Button>
                   </div>
                   
-                  {/* WhatsApp Share Button */}
-                  <Button
-                    onClick={shareOnWhatsApp}
-                    className="w-full bg-green-500 hover:bg-green-600 text-white"
-                  >
-                    <SiWhatsapp className="h-4 w-4 mr-2" />
-                    Share on WhatsApp
-                  </Button>
                 </div>
               </div>
             )}

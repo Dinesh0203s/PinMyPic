@@ -23,16 +23,16 @@ interface UserQueueStats {
 class FaceProcessingQueue {
   private queue: QueueItem[] = [];
   private processing = false;
-  private maxConcurrent = 20; // Increased to handle large batch uploads
+  private maxConcurrent = 16; // Optimized for 80% GPU usage
   private retryAttempts = 3;
-  private processingDelay = 50; // Minimal delay for maximum throughput
+  private processingDelay = 5; // Minimal delay for maximum throughput
   private activeProcessing = new Set<string>();
   
   // User-based queue management
   private userQueues = new Map<string, QueueItem[]>();
   private userStats = new Map<string, UserQueueStats>();
   private maxItemsPerUser = 10000; // Allow up to 10,000 photos per user
-  private userConcurrencyLimit = 20; // Increased concurrent processing per user for large uploads
+  private userConcurrencyLimit = 16; // Optimized for 80% GPU usage
   
   // Performance monitoring
   private processedCount = 0;
@@ -199,7 +199,7 @@ class FaceProcessingQueue {
         });
 
         // Minimal delay for maximum throughput, only if queue is very large
-        if (this.queue.length > 50) {
+        if (this.queue.length > 100) {
           await new Promise(resolve => setTimeout(resolve, this.processingDelay));
         }
 
@@ -269,7 +269,7 @@ class FaceProcessingQueue {
       const { processFacePhoto } = await import('./face-recognition-service');
       const { storage } = await import('./storage');
       
-      // Process the photo to extract face data
+      // Process the photo to extract face data (now with GPU-accelerated similarity)
       const faceData = await processFacePhoto(fileReference);
       
       if (faceData && faceData.length > 0) {
@@ -297,7 +297,14 @@ class FaceProcessingQueue {
       // Clean up local file after successful processing
       try {
         const fs = await import('fs');
-        if (fs.existsSync(fileReference) && fileReference.includes('/uploads/')) {
+        const path = await import('path');
+        
+        // Check if file exists and is in uploads directory (cross-platform path check)
+        if (fs.existsSync(fileReference) && (
+          fileReference.includes('/uploads/') || 
+          fileReference.includes('\\uploads\\') ||
+          fileReference.includes(path.join('uploads'))
+        )) {
           fs.unlinkSync(fileReference);
           console.log(`Cleaned up local file: ${fileReference}`);
         }
@@ -335,6 +342,23 @@ class FaceProcessingQueue {
         } catch (updateError) {
           console.error(`Failed to update photo ${photoId} with error status:`, updateError);
         }
+        
+        // Clean up local file even on failure to prevent orphaned files
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          
+          if (fs.existsSync(fileReference) && (
+            fileReference.includes('/uploads/') || 
+            fileReference.includes('\\uploads\\') ||
+            fileReference.includes(path.join('uploads'))
+          )) {
+            fs.unlinkSync(fileReference);
+            console.log(`Cleaned up local file after processing failure: ${fileReference}`);
+          }
+        } catch (cleanupError) {
+          console.warn(`Failed to cleanup local file after failure ${fileReference}:`, cleanupError);
+        }
       }
       
       this.updatePerformanceMetrics(Date.now() - startTime, false);
@@ -369,6 +393,11 @@ class FaceProcessingQueue {
         this.logQueueStatistics();
       }
     }, 60 * 1000);
+    
+    // Clean up orphaned files every 10 minutes
+    setInterval(() => {
+      this.cleanupOrphanedFiles();
+    }, 10 * 60 * 1000);
   }
 
   /**
@@ -384,6 +413,61 @@ class FaceProcessingQueue {
         this.userStats.delete(userId);
       }
     });
+  }
+
+  /**
+   * Clean up orphaned files in uploads directory
+   */
+  private async cleanupOrphanedFiles(): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      // Get uploads directory
+      const uploadsDir = path.join(__dirname, '..', 'uploads');
+      
+      if (!fs.existsSync(uploadsDir)) {
+        return;
+      }
+      
+      // Get all files in uploads directory
+      const files = fs.readdirSync(uploadsDir, { withFileTypes: true })
+        .filter(dirent => dirent.isFile())
+        .map(dirent => dirent.name);
+      
+      if (files.length === 0) {
+        return;
+      }
+      
+      // Check each file to see if it's orphaned (older than 1 hour and not in queue)
+      const now = Date.now();
+      const maxAge = 60 * 60 * 1000; // 1 hour
+      
+      for (const file of files) {
+        const filePath = path.join(uploadsDir, file);
+        
+        try {
+          const stats = fs.statSync(filePath);
+          const fileAge = now - stats.mtime.getTime();
+          
+          // If file is older than 1 hour and not in queue or being processed
+          if (fileAge > maxAge) {
+            const isInQueue = this.queue.some(item => item.fileReference === filePath);
+            const isBeingProcessed = this.activeProcessing.has(file);
+            
+            if (!isInQueue && !isBeingProcessed) {
+              fs.unlinkSync(filePath);
+              console.log(`Cleaned up orphaned file: ${filePath}`);
+            }
+          }
+        } catch (fileError) {
+          // File might have been deleted by another process
+          console.warn(`Could not check file ${filePath}:`, fileError);
+        }
+      }
+    } catch (error) {
+      console.warn('Error during orphaned file cleanup:', error);
+    }
   }
 
   /**

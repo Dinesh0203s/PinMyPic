@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Upload, Camera, X, FileImage, AlertCircle, CheckCircle, Smartphone, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { UploadOptimizer, MemoryMonitor } from '@/utils/uploadOptimizer';
+import { uploadQueueManager, DynamicUploadStats } from '@/utils/dynamicUploadProcessor';
 
 interface PhotoUploadDialogProps {
   eventId: string;
@@ -39,6 +40,7 @@ export function PhotoUploadDialog({
   const [isDragOver, setIsDragOver] = useState(false);
   const [wakeLock, setWakeLock] = useState<WakeLockSentinel | null>(null);
   const [hasWakeLockSupport, setHasWakeLockSupport] = useState(false);
+  const [dynamicStats, setDynamicStats] = useState<DynamicUploadStats | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -430,6 +432,7 @@ export function PhotoUploadDialog({
     if (uploadFiles.length === 0) return;
 
     setIsUploading(true);
+    setDynamicStats(null);
     
     // Request wake lock on mobile to prevent screen from turning off
     if (hasWakeLockSupport) {
@@ -439,61 +442,19 @@ export function PhotoUploadDialog({
     try {
       const pendingFiles = uploadFiles.filter(f => f.status === 'pending');
       
-      // Use upload optimizer for intelligent batching
-      const optimizer = UploadOptimizer.getInstance();
-      const memoryMonitor = new MemoryMonitor();
+      console.log(`Starting dynamic upload processing: ${pendingFiles.length} files`);
       
-      // Create optimal batches based on browser capabilities and file sizes
-      const files = pendingFiles.map(uf => uf.file);
-      const batches = optimizer.createOptimalBatches(files, 8);
-      
-      console.log(`Processing ${pendingFiles.length} files in ${batches.length} optimized batches`);
-      
-      let completedCount = 0;
-      let errorCount = 0;
-      
-      // Process each batch
-      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-        const batch = batches[batchIndex];
-        const batchUploadFiles = pendingFiles.filter(uf => 
-          batch.files.some(bf => bf.name === uf.file.name && bf.size === uf.file.size)
-        );
-        
-        try {
-          // Check memory before each batch
-          const memoryStatus = memoryMonitor.checkMemoryUsage();
-          if (memoryStatus.critical) {
-            console.warn('Critical memory usage detected, forcing cleanup');
-            memoryMonitor.forceGarbageCollection();
-            
-            // Small pause to allow cleanup
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-          
-          // Upload batch in parallel
-          await Promise.all(batchUploadFiles.map(uploadPhoto));
-          
-          // Count successful uploads in this batch
-          const batchCompleted = batchUploadFiles.filter(uf => {
-            const current = uploadFiles.find(f => f.id === uf.id);
-            return current?.status === 'completed';
-          }).length;
-          
-          completedCount += batchCompleted;
-          
-          // Add intelligent delay between batches
-          if (batchIndex < batches.length - 1) {
-            const delay = optimizer.calculateBatchDelay(pendingFiles.length);
-            if (delay > 0) {
-              await new Promise(resolve => setTimeout(resolve, delay));
-            }
-          }
-          
-        } catch (batchError) {
-          console.error(`Batch ${batchIndex + 1} failed:`, batchError);
-          errorCount += batchUploadFiles.length;
-        }
-      }
+      // Use dynamic upload processing instead of traditional batching
+      await uploadQueueManager.startDynamicProcessing(
+        pendingFiles,
+        uploadPhoto,
+        updateUploadFiles,
+        (stats) => {
+          setDynamicStats(stats);
+          console.log(`Dynamic upload progress: ${stats.completed}/${stats.total} completed, ${stats.uploading} uploading, ${stats.throughput.toFixed(2)} files/sec`);
+        },
+        `upload_${eventId}_${Date.now()}`
+      );
 
       // Final success/error reporting
       const finalErrorCount = uploadFiles.filter(f => f.status === 'error').length;
@@ -525,6 +486,7 @@ export function PhotoUploadDialog({
       });
     } finally {
       setIsUploading(false);
+      setDynamicStats(null);
       
       // Release wake lock when upload is complete
       await releaseWakeLock();
@@ -652,6 +614,7 @@ export function PhotoUploadDialog({
             accept="image/*"
             className="hidden"
             onChange={handleFileSelect}
+            aria-label="Select photos to upload"
           />
 
           {/* Upload Progress */}
@@ -700,6 +663,28 @@ export function PhotoUploadDialog({
                     <span>{uploadStats.pending} pending</span>
                   </div>
                   
+                  {/* Dynamic Upload Stats */}
+                  {dynamicStats && (
+                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-4">
+                          <span className="text-blue-700 font-medium">
+                            Dynamic Processing: {dynamicStats.completed}/{dynamicStats.total}
+                          </span>
+                          <span className="text-blue-600">
+                            {dynamicStats.uploading} active
+                          </span>
+                          <span className="text-blue-600">
+                            {dynamicStats.throughput.toFixed(1)} files/sec
+                          </span>
+                        </div>
+                        <div className="text-xs text-blue-500">
+                          {dynamicStats.pending} pending
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Mobile Upload Status */}
                   {isUploading && wakeLock && (
                     <div className="flex items-center gap-2 mt-2 p-2 bg-green-50 border border-green-200 rounded">

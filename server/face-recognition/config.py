@@ -77,14 +77,14 @@ GPU_AVAILABLE = (has_cuda or has_gpu_onnx) and not FORCE_CPU
 CUDA_AVAILABLE = has_cuda and not FORCE_CPU
 ONNX_GPU_AVAILABLE = has_gpu_onnx and not FORCE_CPU
 
-# Processing configuration - adjust batch size based on GPU availability
+# Processing configuration - RTX 3060 optimized for maximum performance
 if GPU_AVAILABLE:
-    BATCH_SIZE = int(os.getenv("GPU_BATCH_SIZE", "128"))  # Increased batch for 80% GPU usage
+    BATCH_SIZE = int(os.getenv("GPU_BATCH_SIZE", "256"))  # Massive batch for RTX 3060 12GB VRAM
     MAX_IMAGE_SIZE = int(os.getenv("GPU_MAX_IMAGE_SIZE",
-                                   "2048"))  # Higher resolution for better GPU utilization
-    # Dynamic batch processing settings optimized for 80% GPU usage
-    DYNAMIC_BATCH_SIZE = int(os.getenv("DYNAMIC_BATCH_SIZE", "64"))  # Larger dynamic batches
-    MAX_CONCURRENT_IMAGES = int(os.getenv("MAX_CONCURRENT_IMAGES", "16"))  # More concurrent processing
+                                   "2560"))  # Higher resolution for maximum GPU utilization
+    # Dynamic batch processing settings optimized for RTX 3060 full potential
+    DYNAMIC_BATCH_SIZE = int(os.getenv("DYNAMIC_BATCH_SIZE", "128"))  # Double the dynamic batches
+    MAX_CONCURRENT_IMAGES = int(os.getenv("MAX_CONCURRENT_IMAGES", "32"))  # Maximum concurrent processing
 else:
     BATCH_SIZE = int(os.getenv(
         "CPU_BATCH_SIZE", "32"))  # Increased batch for better CPU utilization
@@ -115,15 +115,17 @@ def get_onnx_providers():
                     {
                         'device_id': GPU_DEVICE_ID,
                         'arena_extend_strategy': 'kNextPowerOfTwo',
-                        'gpu_mem_limit': 4 * 1024 * 1024 * 1024,  # 4GB (80% of 6GB)
+                        'gpu_mem_limit': 10 * 1024 * 1024 * 1024,  # 10GB (80% of 12GB RTX 3060)
                         'cudnn_conv_algo_search': 'EXHAUSTIVE',
                         'do_copy_in_default_stream': True,
                     }))
 
-            # DirectML (fallback for Windows)
+            # DirectML (optimized for RTX 3060 on Windows)
             if 'DmlExecutionProvider' in available_providers:
                 providers.append(('DmlExecutionProvider', {
                     'device_id': GPU_DEVICE_ID,
+                    'enable_dynamic_graph_fusion': True,
+                    'disable_metacommands': False,
                 }))
 
             # TensorRT (optional - only if libraries are available)
@@ -172,7 +174,7 @@ ENABLE_MEMORY_OPTIMIZATION = os.getenv("ENABLE_MEMORY_OPTIMIZATION",
                                        "true").lower() == "true"
 ENABLE_PARALLEL_PROCESSING = os.getenv("ENABLE_PARALLEL_PROCESSING",
                                        "true").lower() == "true"
-MAX_WORKERS = int(os.getenv("MAX_WORKERS", "16" if GPU_AVAILABLE else "6"))  # Increased for 80% GPU usage
+MAX_WORKERS = int(os.getenv("MAX_WORKERS", "24" if GPU_AVAILABLE else "6"))  # Maximum workers for RTX 3060
 
 # Performance optimizations
 import multiprocessing

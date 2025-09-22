@@ -10,6 +10,8 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { SimpleFullscreenViewer } from '@/components/SimpleFullscreenViewer';
 import { Event, Photo } from '@shared/types';
+import { useSinglePhotoDownload } from '@/hooks/useSinglePhotoDownload';
+import SingleDownloadProgress from '@/components/SingleDownloadProgress';
 
 const QRAccess: React.FC = () => {
   const { eventId } = useParams<{ eventId: string }>();
@@ -34,6 +36,9 @@ const QRAccess: React.FC = () => {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [savingPhotoIds, setSavingPhotoIds] = useState<string[]>([]);
   const [savedPhotoIds, setSavedPhotoIds] = useState<string[]>([]);
+  
+  // Single photo download hook
+  const { downloadPhoto, activeDownloads } = useSinglePhotoDownload();
   
   // Admin setting for upload photo search - controlled by event allowPhotoUploadForFaceRecognition field
   const [uploadPhotoSearchEnabled, setUploadPhotoSearchEnabled] = useState(false);
@@ -176,6 +181,31 @@ const QRAccess: React.FC = () => {
       
       if (response.ok) {
         const data = await response.json();
+        
+        // Check if no face was detected
+        if (data.noFaceDetected) {
+          // Show informational message instead of error
+          toast({
+            title: data.guidance?.title || "No Face Detected",
+            description: data.guidance?.message || "We couldn't detect a clear face in your photo. Please try again with a better photo.",
+            duration: 5000,
+          });
+          
+          // Show tips if available
+          if (data.guidance?.tips && data.guidance.tips.length > 0) {
+            setTimeout(() => {
+              toast({
+                title: "Tips for Better Photos",
+                description: data.guidance.tips.join(" • "),
+                duration: 8000,
+              });
+            }, 1000);
+          }
+          
+          // Don't show results - let user try again
+          return;
+        }
+        
         setMatchedPhotos(data.matchedPhotos || []);
         setShowResults(true);
         
@@ -551,16 +581,9 @@ const QRAccess: React.FC = () => {
                             size="sm"
                             variant="secondary"
                             onClick={async () => {
-                              const response = await fetch(`${photo.url}?download=true`);
-                              const blob = await response.blob();
-                              const url = window.URL.createObjectURL(blob);
-                              const link = document.createElement('a');
-                              link.href = url;
-                              link.download = photo.filename || 'photo';
-                              document.body.appendChild(link);
-                              link.click();
-                              window.URL.revokeObjectURL(url);
-                              document.body.removeChild(link);
+                              const downloadUrl = `${photo.url}?download=true&quality=95`;
+                              const filename = photo.filename || `photo-${photo.id}.jpg`;
+                              await downloadPhoto(photo.id, downloadUrl, filename);
                             }}
                           >
                             <Download className="h-4 w-4" />
@@ -620,6 +643,9 @@ const QRAccess: React.FC = () => {
         />
       )}
       
+      {/* Single Download Progress Indicators */}
+      <SingleDownloadProgress downloads={activeDownloads} />
+
       <Footer />
     </div>
   );

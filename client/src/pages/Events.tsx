@@ -18,6 +18,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import JSZip from 'jszip';
+import { useDownloadManager } from '@/hooks/useDownloadManager';
+import DownloadProgressModal from '@/components/DownloadProgressModal';
 
 const Events = () => {
   const { eventId: urlEventId } = useParams<{ eventId: string }>();
@@ -61,6 +63,10 @@ const Events = () => {
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  
+  // Download manager
+  const downloadManager = useDownloadManager({ maxConcurrent: 6 });
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
   // Removed upload mode - only camera mode available
   
   // Save to Profile functionality
@@ -76,8 +82,7 @@ const Events = () => {
   const [generatingUrl, setGeneratingUrl] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   
-  // Download all functionality
-  const [downloadingAll, setDownloadingAll] = useState(false);
+  // Download all functionality - now handled by download manager
   
   // Removed upload photo search - only selfie mode available
   
@@ -190,7 +195,7 @@ const Events = () => {
   };
 
 
-  // Download all photos as zip with optimizations
+  // Download all photos with progress modal
   const downloadAllPhotos = async () => {
     if (photos.length === 0) {
       toast({
@@ -201,121 +206,28 @@ const Events = () => {
       return;
     }
 
-    setDownloadingAll(true);
+    const eventTitle = selectedEvent?.title || 'photos';
     
-    try {
-      const zip = new JSZip();
-      const eventTitle = selectedEvent?.title || 'photos';
-      let downloadCount = 0;
-      let errorCount = 0;
-      
-      // Show initial progress
-      toast({
-        title: "Starting Download",
-        description: `Preparing ${photos.length} photos for download...`
-      });
+    // Prepare download items
+    const downloadItems = photos.map((photo, index) => ({
+      id: `${photo.id}-${index}`,
+      filename: photo.filename || `photo_${index + 1}.jpg`,
+      url: photo.url.includes('/api/images/') 
+        ? `${photo.url}?download=true&quality=90`
+        : photo.url
+    }));
 
-      // Batch download with concurrency limit for better performance
-      const BATCH_SIZE = 5; // Download 5 photos at a time
-      const batches = [];
-      
-      for (let i = 0; i < photos.length; i += BATCH_SIZE) {
-        batches.push(photos.slice(i, i + BATCH_SIZE));
-      }
+    // Add downloads to manager
+    downloadManager.addDownloads(downloadItems);
+    
+    // Show progress modal
+    setShowDownloadModal(true);
+    
+    // Start downloads with ZIP creation
+    const zipFilename = `${eventTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_photos.zip`;
+    downloadManager.startDownloads(zipFilename);
 
-      // Process batches sequentially but photos within batch concurrently
-      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-        const batch = batches[batchIndex];
-        
-        const batchPromises = batch.map(async (photo, index) => {
-          try {
-            const downloadUrl = photo.url.includes('/api/images/') 
-              ? `${photo.url}?download=true&quality=85` // Reduced quality for faster download
-              : photo.url;
-            
-            const response = await fetch(downloadUrl);
-            if (!response.ok) throw new Error(`Failed to fetch ${photo.filename}`);
-            
-            const blob = await response.blob();
-            const filename = photo.filename || `photo_${batchIndex * BATCH_SIZE + index + 1}.jpg`;
-            
-            // Add to zip with event folder structure
-            zip.file(`${eventTitle}/${filename}`, blob);
-            downloadCount++;
-            
-            return true;
-          } catch (error) {
-            console.error(`Error downloading photo ${photo.filename}:`, error);
-            errorCount++;
-            return false;
-          }
-        });
-
-        // Wait for current batch to complete
-        await Promise.all(batchPromises);
-        
-        // Update progress after each batch
-        toast({
-          title: "Download Progress",
-          description: `Downloaded ${downloadCount} of ${photos.length} photos...`
-        });
-        
-        // Small delay between batches to prevent overwhelming the server
-        if (batchIndex < batches.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
-      }
-
-      if (downloadCount === 0) {
-        toast({
-          title: "Download Failed",
-          description: "Unable to download any photos. Please try again.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Generate and download zip file with faster compression
-      toast({
-        title: "Creating ZIP File",
-        description: "Compressing photos into ZIP file..."
-      });
-
-      const zipBlob = await zip.generateAsync({
-        type: 'blob',
-        compression: 'DEFLATE',
-        compressionOptions: { level: 3 }, // Faster compression (less compression ratio but much faster)
-        streamFiles: true // Use streaming for better memory management
-      });
-
-      // Create download link
-      const url = window.URL.createObjectURL(zipBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${eventTitle}_photos.zip`;
-      document.body.appendChild(link);
-      link.click();
-      
-      // Cleanup
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(link);
-
-      // Show success message
-      toast({
-        title: "Download Complete",
-        description: `Successfully downloaded ${downloadCount} photos${errorCount > 0 ? ` (${errorCount} failed)` : ''}.`
-      });
-
-    } catch (error) {
-      console.error('Error creating zip file:', error);
-      toast({
-        title: "Download Failed",
-        description: "An error occurred while creating the ZIP file.",
-        variant: "destructive"
-      });
-    } finally {
-      setDownloadingAll(false);
-    }
+    // No toast - progress modal shows all feedback
   };
 
   // Navigation functions for slideshow
@@ -763,6 +675,30 @@ const Events = () => {
       if (response.ok) {
         const data = await response.json();
         
+        // Check if no face was detected
+        if (data.noFaceDetected) {
+          // Show informational message instead of error
+          toast({
+            title: data.guidance?.title || "No Face Detected",
+            description: data.guidance?.message || "We couldn't detect a clear face in your photo. Please try again with a better photo.",
+            duration: 5000,
+          });
+          
+          // Show tips if available
+          if (data.guidance?.tips && data.guidance.tips.length > 0) {
+            setTimeout(() => {
+              toast({
+                title: "Tips for Better Photos",
+                description: data.guidance.tips.join(" • "),
+                duration: 8000,
+              });
+            }, 1000);
+          }
+          
+          // Don't close the dialog - let user try again
+          return;
+        }
+        
         // Show only matched photos (filtered by face recognition)
         setFaceScanDialogOpen(false);
         setPhotos(data.matchedPhotos || []);
@@ -900,6 +836,23 @@ const Events = () => {
     }
   }, [showInlineGallery]);
 
+  // Close download modal when navigating back to events list
+  useEffect(() => {
+    if (!showInlineGallery && showDownloadModal) {
+      setShowDownloadModal(false);
+    }
+  }, [showInlineGallery, showDownloadModal]);
+
+  // Close download modal when switching events (but not on initial load)
+  const [previousEventId, setPreviousEventId] = useState<string | null>(null);
+  useEffect(() => {
+    if (selectedEvent?.id && previousEventId && selectedEvent.id !== previousEventId && showDownloadModal) {
+      // Reset download modal when switching to a different event
+      setShowDownloadModal(false);
+    }
+    setPreviousEventId(selectedEvent?.id || null);
+  }, [selectedEvent?.id, previousEventId, showDownloadModal]);
+
   // Show inline gallery instead of events list
   if (showInlineGallery && selectedEvent) {
 
@@ -933,27 +886,73 @@ const Events = () => {
                   </p>
                 </div>
                 
-                <Button
-                  onClick={downloadAllPhotos}
-                  disabled={photos.length === 0 || downloadingAll}
-                  variant="outline"
-                  className="flex items-center gap-2 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 text-green-700 hover:from-green-100 hover:to-emerald-100 order-2 sm:order-none text-sm md:text-base"
-                  size="sm"
-                >
-                  {downloadingAll ? (
-                    <>
-                      <div className="animate-spin rounded-full h-3 w-3 md:h-4 md:w-4 border-2 border-green-600 border-t-transparent"></div>
-                      <span className="hidden sm:inline">Downloading...</span>
-                      <span className="sm:hidden">...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Archive className="h-3 w-3 md:h-4 md:w-4" />
-                      <span className="hidden sm:inline">Download All ({photos.length})</span>
-                      <span className="sm:hidden">All ({photos.length})</span>
-                    </>
+                <div className="flex flex-col items-end gap-2 order-2 sm:order-none">
+                  <Button
+                    onClick={downloadAllPhotos}
+                    disabled={photos.length === 0 || downloadManager.isActive}
+                    variant="outline"
+                    className="flex items-center gap-2 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 text-green-700 hover:from-green-100 hover:to-emerald-100 text-sm md:text-base"
+                    size="sm"
+                  >
+                    {downloadManager.isActive ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 md:h-4 md:w-4 border-2 border-green-600 border-t-transparent"></div>
+                        <span className="hidden sm:inline">Downloading...</span>
+                        <span className="sm:hidden">...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Archive className="h-3 w-3 md:h-4 md:w-4" />
+                        <span className="hidden sm:inline">Download All ({photos.length})</span>
+                        <span className="sm:hidden">All ({photos.length})</span>
+                      </>
+                    )}
+                  </Button>
+                  
+                  {/* Progress bar for download all */}
+                  {downloadManager.isActive && downloadManager.downloads.length > 0 && (
+                    <div className="w-full max-w-xs">
+                      <div className="flex justify-between text-xs text-gray-600 mb-1">
+                        <span>Overall Progress</span>
+                        <span>
+                          {Math.round(
+                            downloadManager.downloads.reduce((sum, item) => sum + item.progress, 0) / 
+                            downloadManager.downloads.length
+                          )}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full transition-all duration-300"
+                          style={{ 
+                            width: `${Math.round(
+                              downloadManager.downloads.reduce((sum, item) => sum + item.progress, 0) / 
+                              downloadManager.downloads.length
+                            )}%` 
+                          }}
+                        ></div>
+                      </div>
+                      <div className="flex justify-between text-xs text-gray-500 mt-1">
+                        <span>
+                          {downloadManager.downloads.filter(d => d.status === 'completed').length} / {downloadManager.downloads.length} completed
+                        </span>
+                        <span>
+                          {downloadManager.downloads
+                            .filter(d => d.status === 'downloading' && d.speed)
+                            .reduce((sum, d) => sum + (d.speed || 0), 0) > 0 && (
+                            <>
+                              {Math.round(
+                                downloadManager.downloads
+                                  .filter(d => d.status === 'downloading' && d.speed)
+                                  .reduce((sum, d) => sum + (d.speed || 0), 0) / 1024 / 1024
+                              )} MB/s
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    </div>
                   )}
-                </Button>
+                </div>
               </div>
 
               {/* Photo Gallery with Pagination */}
@@ -1528,6 +1527,18 @@ const Events = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Download Progress Modal */}
+      <DownloadProgressModal
+        open={showDownloadModal}
+        onOpenChange={setShowDownloadModal}
+        downloads={downloadManager.downloads}
+        onCancel={downloadManager.cancelDownloads}
+        onPause={downloadManager.pauseDownloads}
+        onResume={downloadManager.resumeDownloads}
+        isPaused={downloadManager.isPaused}
+        title={`Downloading ${selectedEvent?.title || 'Event'} Photos`}
+      />
 
       <Footer />
     </div>

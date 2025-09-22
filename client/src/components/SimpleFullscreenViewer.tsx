@@ -3,6 +3,8 @@ import { X, Download, ChevronLeft, ChevronRight, Heart, ZoomIn, ZoomOut, RotateC
 import { Button } from '@/components/ui/button';
 import { Photo } from '@shared/types';
 import { useToast } from '@/hooks/use-toast';
+import { useSinglePhotoDownload } from '@/hooks/useSinglePhotoDownload';
+import SingleDownloadProgress from '@/components/SingleDownloadProgress';
 
 interface SimpleFullscreenViewerProps {
   photo: Photo;
@@ -38,6 +40,9 @@ export const SimpleFullscreenViewer: React.FC<SimpleFullscreenViewerProps> = ({
   const imageRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  
+  // Single photo download hook
+  const { downloadPhoto, activeDownloads } = useSinglePhotoDownload();
 
   const isLiked = savedPhotoIds.includes(photo.id);
   const isSaving = savingPhotoIds.includes(photo.id);
@@ -49,28 +54,13 @@ export const SimpleFullscreenViewer: React.FC<SimpleFullscreenViewerProps> = ({
   }, [photo.id]);
 
   const handleDownload = async () => {
-    try {
-      const downloadUrl = photo.url.startsWith('/api/images/') 
-        ? `${photo.url}?download=true` 
-        : photo.url;
-      
-      const response = await fetch(downloadUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = photo.filename || 'photo';
-      document.body.appendChild(link);
-      link.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error('Error downloading photo:', error);
-      const link = document.createElement('a');
-      link.href = photo.url;
-      link.download = photo.filename || 'photo';
-      link.click();
-    }
+    const downloadUrl = photo.url.startsWith('/api/images/') 
+      ? `${photo.url}?download=true&quality=95` 
+      : photo.url;
+    const filename = photo.filename || `photo-${photo.id}.jpg`;
+    
+    // Use the new download system with progress
+    await downloadPhoto(photo.id, downloadUrl, filename);
   };
 
   const handleLike = async () => {
@@ -404,31 +394,16 @@ export const SimpleFullscreenViewer: React.FC<SimpleFullscreenViewerProps> = ({
           <Button
             variant="ghost"
             size="lg"
-            onClick={async () => {
-              try {
-                const originalUrl = photo.url.includes('/api/images/') 
-                  ? `${photo.url}?download=true`
-                  : photo.url;
-                const response = await fetch(originalUrl);
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = photo.filename || 'photo';
-                document.body.appendChild(link);
-                link.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(link);
-              } catch (error) {
-                console.error('Error downloading photo:', error);
-              }
-            }}
+            onClick={handleDownload}
             className="h-12 w-12 rounded-full bg-white/20 hover:bg-white/30 text-white"
           >
             <Download className="h-5 w-5" />
           </Button>
         </div>
       </div>
+      
+      {/* Single Download Progress Indicators */}
+      <SingleDownloadProgress downloads={activeDownloads} />
     </div>
   );
 };

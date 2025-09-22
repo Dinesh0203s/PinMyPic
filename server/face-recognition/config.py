@@ -79,14 +79,19 @@ ONNX_GPU_AVAILABLE = has_gpu_onnx and not FORCE_CPU
 
 # Processing configuration - adjust batch size based on GPU availability
 if GPU_AVAILABLE:
-    BATCH_SIZE = int(os.getenv("GPU_BATCH_SIZE", "64"))  # Larger batch for GPU
+    BATCH_SIZE = int(os.getenv("GPU_BATCH_SIZE", "128"))  # Increased batch for 80% GPU usage
     MAX_IMAGE_SIZE = int(os.getenv("GPU_MAX_IMAGE_SIZE",
-                                   "1920"))  # Higher resolution for GPU
+                                   "2048"))  # Higher resolution for better GPU utilization
+    # Dynamic batch processing settings optimized for 80% GPU usage
+    DYNAMIC_BATCH_SIZE = int(os.getenv("DYNAMIC_BATCH_SIZE", "64"))  # Larger dynamic batches
+    MAX_CONCURRENT_IMAGES = int(os.getenv("MAX_CONCURRENT_IMAGES", "16"))  # More concurrent processing
 else:
     BATCH_SIZE = int(os.getenv(
         "CPU_BATCH_SIZE", "32"))  # Increased batch for better CPU utilization
     MAX_IMAGE_SIZE = int(os.getenv("CPU_MAX_IMAGE_SIZE",
                                    "1024"))  # Lower resolution for CPU
+    DYNAMIC_BATCH_SIZE = 16  # Smaller for CPU
+    MAX_CONCURRENT_IMAGES = 6  # Lower for CPU
 
 MIN_FACE_SIZE = int(os.getenv("MIN_FACE_SIZE",
                               "20"))  # Minimum face size for detection
@@ -103,47 +108,50 @@ def get_onnx_providers():
             import onnxruntime as ort
             available_providers = ort.get_available_providers()
 
-            # TensorRT (fastest for NVIDIA GPUs)
-            if 'TensorrtExecutionProvider' in available_providers:
-                providers.append((
-                    'TensorrtExecutionProvider',
-                    {
-                        'device_id': GPU_DEVICE_ID,
-                        'trt_max_workspace_size': 2147483648,  # 2GB
-                        'trt_fp16_enable': True,
-                    }))
-
-            # CUDA (fallback for NVIDIA GPUs)
+            # CUDA (primary for NVIDIA GPUs)
             if 'CUDAExecutionProvider' in available_providers:
                 providers.append((
                     'CUDAExecutionProvider',
                     {
                         'device_id': GPU_DEVICE_ID,
                         'arena_extend_strategy': 'kNextPowerOfTwo',
-                        'gpu_mem_limit': 2 * 1024 * 1024 * 1024,  # 2GB
+                        'gpu_mem_limit': 4 * 1024 * 1024 * 1024,  # 4GB (80% of 6GB)
                         'cudnn_conv_algo_search': 'EXHAUSTIVE',
                         'do_copy_in_default_stream': True,
                     }))
 
-            # DirectML (for AMD GPUs and Intel integrated graphics)
+            # DirectML (fallback for Windows)
             if 'DmlExecutionProvider' in available_providers:
                 providers.append(('DmlExecutionProvider', {
                     'device_id': GPU_DEVICE_ID,
                 }))
 
+            # TensorRT (optional - only if libraries are available)
+            # Skip TensorRT for now as it requires additional libraries
+            # if 'TensorrtExecutionProvider' in available_providers:
+            #     providers.append((
+            #         'TensorrtExecutionProvider',
+            #         {
+            #             'device_id': GPU_DEVICE_ID,
+            #             'trt_max_workspace_size': 2147483648,  # 2GB
+            #             'trt_fp16_enable': True,
+            #         }))
+
         except Exception as e:
             logger.warning(f"Error configuring GPU providers: {e}")
 
-    # Always add CPU as fallback with optimized threading
-    providers.append((
-        'CPUExecutionProvider',
-        {
-            'arena_extend_strategy': 'kSameAsRequested',
-            'intra_op_num_threads': 0,  # Use all available cores
-            'inter_op_num_threads': 0,  # Use all available cores
-            'enable_cpu_mem_arena': True,
-            'enable_memory_pattern': True,
-        }))
+    # Only add CPU as fallback if no GPU providers are available
+    if not providers:
+        logger.warning("No GPU providers available, falling back to CPU")
+        providers.append((
+            'CPUExecutionProvider',
+            {
+                'arena_extend_strategy': 'kSameAsRequested',
+                'intra_op_num_threads': 0,  # Use all available cores
+                'inter_op_num_threads': 0,  # Use all available cores
+                'enable_cpu_mem_arena': True,
+                'enable_memory_pattern': True,
+            }))
 
     return providers
 
@@ -164,7 +172,7 @@ ENABLE_MEMORY_OPTIMIZATION = os.getenv("ENABLE_MEMORY_OPTIMIZATION",
                                        "true").lower() == "true"
 ENABLE_PARALLEL_PROCESSING = os.getenv("ENABLE_PARALLEL_PROCESSING",
                                        "true").lower() == "true"
-MAX_WORKERS = int(os.getenv("MAX_WORKERS", "8" if GPU_AVAILABLE else "6"))
+MAX_WORKERS = int(os.getenv("MAX_WORKERS", "16" if GPU_AVAILABLE else "6"))  # Increased for 80% GPU usage
 
 # Performance optimizations
 import multiprocessing

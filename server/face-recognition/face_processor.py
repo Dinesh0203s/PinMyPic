@@ -274,7 +274,7 @@ class FaceProcessor:
     
     def process_batch(self, image_paths: List[str]) -> Dict[str, List[Dict]]:
         """
-        Process a batch of images with optimized GPU utilization.
+        Process a batch of images with optimized GPU utilization using dynamic processing.
         
         Args:
             image_paths: List of image file paths
@@ -289,31 +289,73 @@ class FaceProcessor:
                 results[image_path] = self.process_image_file(image_path)
             return results
         
-        # Parallel processing for GPU
+        # Use dynamic batch processor for maximum GPU utilization
+        try:
+            from dynamic_batch_processor import get_dynamic_processor
+            dynamic_processor = get_dynamic_processor(self)
+            return dynamic_processor.process_dynamic_batch(image_paths)
+        except ImportError:
+            # Fallback to original dynamic processing if import fails
+            return self._process_dynamic_fallback(image_paths)
+    
+    def _process_dynamic_fallback(self, image_paths: List[str]) -> Dict[str, List[Dict]]:
+        """Fallback dynamic processing implementation."""
         import concurrent.futures
         import threading
+        import queue
+        import time
         
         results = {}
         results_lock = threading.Lock()
+        processing_queue = queue.Queue()
+        completed_count = 0
+        total_count = len(image_paths)
         
-        def process_single(image_path):
-            try:
-                faces = self.process_image_file(image_path)
-                with results_lock:
-                    results[image_path] = faces
-            except Exception as e:
-                logger.error(f"Error processing {image_path}: {e}")
-                with results_lock:
-                    results[image_path] = []
+        # Add all images to processing queue
+        for image_path in image_paths:
+            processing_queue.put(image_path)
         
-        # Use thread pool for I/O bound operations with optimized worker count
-        max_workers = min(MAX_WORKERS, len(image_paths), 8)
+        def process_single_dynamic():
+            """Process single image and immediately return result."""
+            while not processing_queue.empty():
+                try:
+                    image_path = processing_queue.get_nowait()
+                    start_time = time.time()
+                    
+                    faces = self.process_image_file(image_path)
+                    processing_time = time.time() - start_time
+                    
+                    with results_lock:
+                        results[image_path] = faces
+                        completed_count += 1
+                    
+                    # Log progress for large batches
+                    if total_count > 10 and completed_count % 10 == 0:
+                        logger.info(f"Dynamic batch progress: {completed_count}/{total_count} completed")
+                    
+                    # Clean up GPU memory after each image for better performance
+                    if ENABLE_MEMORY_OPTIMIZATION:
+                        self._cleanup_gpu_memory()
+                    
+                except queue.Empty:
+                    break
+                except Exception as e:
+                    logger.error(f"Error processing {image_path}: {e}")
+                    with results_lock:
+                        results[image_path] = []
+                        completed_count += 1
+        
+        # Use optimized thread pool for 80% GPU utilization
+        max_workers = min(MAX_WORKERS, len(image_paths), 16)  # Increased for 80% GPU usage
+        
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit all tasks and process them
-            futures = [executor.submit(process_single, image_path) for image_path in image_paths]
+            # Submit all worker threads
+            futures = [executor.submit(process_single_dynamic) for _ in range(max_workers)]
+            
             # Wait for all to complete
             concurrent.futures.wait(futures)
         
+        logger.info(f"Dynamic batch processing completed: {completed_count}/{total_count} images processed")
         return results
     
     def _cleanup_gpu_memory(self):

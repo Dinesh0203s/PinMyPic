@@ -3,6 +3,7 @@
 
 # Core dependencies (same as base requirements)
 faiss-gpu>=1.11.0  # GPU-accelerated similarity search
+cupy-cuda11x>=12.0.0  # GPU-accelerated NumPy-like arrays for similarity calculations
 flask>=3.1.1
 insightface>=0.7.3
 numpy>=2.3.1

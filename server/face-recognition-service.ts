@@ -37,12 +37,34 @@ async function initializeFaceRecognitionService() {
     console.log('Downloading face recognition models...');
     await downloadModels();
     
-    // Start the Python Flask app
+    // Start the Python Flask app with GPU environment variables
+    const gpuEnv = {
+      ...process.env,
+      PYTHONUNBUFFERED: '1',
+      // GPU Configuration
+      CUDA_VISIBLE_DEVICES: '0',
+      FORCE_CPU: 'false',
+      AUTO_DETECT_GPU: 'true',
+      // CUDA Optimization Flags
+      TF_FORCE_GPU_ALLOW_GROWTH: 'true',
+      CUDA_CACHE_DISABLE: '0',
+      CUDA_LAUNCH_BLOCKING: '0',
+      CUDNN_BENCHMARK: '1',
+      // GPU Performance Settings
+      GPU_BATCH_SIZE: '64',
+      GPU_MAX_IMAGE_SIZE: '1920',
+      ENABLE_MEMORY_OPTIMIZATION: 'true',
+      ENABLE_PARALLEL_PROCESSING: 'true',
+      MAX_WORKERS: '8',
+      // Add cuDNN to PATH
+      PATH: process.env.PATH + ';C:\\Users\\Aakash\\AppData\\Roaming\\Python\\Python313\\site-packages\\nvidia\\cudnn\\bin'
+    };
+
     pythonProcess = spawn('python', [
       path.join(__dirname, 'face-recognition', 'app.py')
     ], {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, PYTHONUNBUFFERED: '1' }
+      env: gpuEnv
     });
 
     pythonProcess.stdout.on('data', (data: Buffer) => {

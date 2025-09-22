@@ -184,10 +184,16 @@ def get_status():
         processor = get_face_processor()
         model_info = processor.get_model_info()
         
+        # Get GPU similarity calculator info
+        from gpu_similarity import get_similarity_calculator
+        similarity_calculator = get_similarity_calculator()
+        similarity_info = similarity_calculator.get_performance_info()
+        
         return jsonify({
             'success': True,
             'model_info': model_info,
-            'performance_stats': processor.get_performance_stats()
+            'performance_stats': processor.get_performance_stats(),
+            'similarity_calculator': similarity_info
         })
     except Exception as e:
         logger.error(f"Error getting status: {str(e)}")
@@ -258,7 +264,7 @@ def process_photo():
 
 @app.route('/compare-faces', methods=['POST'])
 def compare_faces():
-    """Compare a selfie with stored face embeddings."""
+    """Compare a selfie with stored face embeddings using GPU-accelerated similarity calculation."""
     try:
         data = request.json
         selfie_data = data.get('selfieData')  # Base64 encoded image
@@ -284,18 +290,18 @@ def compare_faces():
         # Use the first face (largest)
         selfie_embedding = np.array(faces[0]['embedding'])
         
-        # Calculate similarities
+        # Prepare stored embeddings for batch processing
+        stored_embeddings = np.array([emb['embedding'] for emb in embeddings])
+        
+        # GPU-accelerated similarity calculation
+        from gpu_similarity import calculate_similarities
+        similarities = calculate_similarities(selfie_embedding, stored_embeddings)
+        
+        # Create matches
         matches = []
-        for i, stored in enumerate(embeddings):
-            stored_embedding = np.array(stored['embedding'])
-            
-            # Calculate cosine similarity
-            similarity = np.dot(selfie_embedding, stored_embedding) / (
-                np.linalg.norm(selfie_embedding) * np.linalg.norm(stored_embedding)
-            )
-            
+        for i, similarity in enumerate(similarities):
             matches.append({
-                'photoId': stored['photoId'],
+                'photoId': embeddings[i]['photoId'],
                 'similarity': float(similarity)
             })
         

@@ -1,9 +1,17 @@
 import React from 'react';
-import { Progress } from '@/components/ui/progress';
-import { Download, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { 
+  Download, 
+  CheckCircle, 
+  AlertCircle, 
+  Clock,
+  X
+} from 'lucide-react';
 
-interface SingleDownload {
+interface SingleDownloadProgress {
   id: string;
   filename: string;
   progress: number;
@@ -13,99 +21,110 @@ interface SingleDownload {
 }
 
 interface SingleDownloadProgressProps {
-  downloads: SingleDownload[];
-  className?: string;
+  downloads: SingleDownloadProgress[];
+  onRemove?: (id: string) => void;
 }
 
-export const SingleDownloadProgress: React.FC<SingleDownloadProgressProps> = ({ 
-  downloads, 
-  className = "" 
+const SingleDownloadProgress: React.FC<SingleDownloadProgressProps> = ({
+  downloads,
+  onRemove
 }) => {
-  if (downloads.length === 0) return null;
+  if (downloads.length === 0) {
+    return null;
+  }
 
-  // Format file size
-  const formatSpeed = (bytesPerSecond: number) => {
-    if (bytesPerSecond === 0) return '';
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B';
     const k = 1024;
-    const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
-    const i = Math.floor(Math.log(bytesPerSecond) / Math.log(k));
-    return parseFloat((bytesPerSecond / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  // Get status icon
-  const getStatusIcon = (status: SingleDownload['status']) => {
+  const formatSpeed = (bytesPerSecond: number) => {
+    return formatBytes(bytesPerSecond) + '/s';
+  };
+
+  const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'downloading':
-        return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
       case 'completed':
         return <CheckCircle className="h-4 w-4 text-green-500" />;
       case 'error':
-        return <XCircle className="h-4 w-4 text-red-500" />;
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+      case 'downloading':
+        return <Download className="h-4 w-4 text-blue-500 animate-pulse" />;
       default:
-        return <Download className="h-4 w-4 text-gray-400" />;
+        return <Clock className="h-4 w-4 text-gray-400" />;
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <Badge variant="default" className="bg-green-100 text-green-800">Completed</Badge>;
+      case 'error':
+        return <Badge variant="destructive">Error</Badge>;
+      case 'downloading':
+        return <Badge variant="default" className="bg-blue-100 text-blue-800">Downloading</Badge>;
+      default:
+        return <Badge variant="outline">Pending</Badge>;
     }
   };
 
   return (
-    <div className={`fixed bottom-4 left-4 right-4 sm:bottom-6 sm:left-auto sm:right-6 sm:w-96 z-50 space-y-3 ${className}`}>
+    <div className="fixed bottom-4 right-4 z-50 space-y-2 max-w-sm">
       {downloads.map((download) => (
-        <Card 
-          key={download.id} 
-          className="w-full sm:w-96 shadow-2xl border-l-4 border-l-blue-500 bg-white/98 backdrop-blur-md animate-in slide-in-from-right-5 duration-300"
-        >
-          <CardContent className="p-3 sm:p-4">
-            <div className="space-y-2 sm:space-y-3">
-              {/* Header with icon, filename, and percentage */}
-              <div className="flex items-center gap-2 sm:gap-3">
+        <Card key={download.id} className="shadow-lg border-l-4 border-l-blue-500">
+          <CardContent className="p-3">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center space-x-2 flex-1 min-w-0">
                 {getStatusIcon(download.status)}
                 <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center">
-                    <p className="text-xs sm:text-sm font-semibold truncate text-gray-800" title={download.filename}>
-                      📄 {download.filename}
-                    </p>
-                    <span className="text-sm sm:text-lg font-bold text-blue-600 ml-2">
-                      {Math.round(download.progress)}%
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium truncate" title={download.filename}>
+                      {download.filename}
                     </span>
+                    {getStatusBadge(download.status)}
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <Progress value={download.progress} className="h-1 flex-1 mr-2" />
+                      <span className="text-xs text-gray-500 whitespace-nowrap">
+                        {download.progress}%
+                      </span>
+                    </div>
+                    
+                    {download.status === 'downloading' && download.speed && (
+                      <div className="text-xs text-gray-500">
+                        {formatSpeed(download.speed)}
+                      </div>
+                    )}
+                    
+                    {download.status === 'error' && download.error && (
+                      <div className="text-xs text-red-500 truncate" title={download.error}>
+                        {download.error}
+                      </div>
+                    )}
+                    
+                    {download.status === 'completed' && (
+                      <div className="text-xs text-green-600">
+                        Download completed
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
               
-              {/* Progress bar for downloading status */}
-              {download.status === 'downloading' && (
-                <>
-                  <div className="space-y-1 sm:space-y-2">
-                    <Progress value={download.progress} className="h-2 sm:h-3 bg-gray-200" />
-                    <div className="flex justify-between text-xs">
-                      <span className="text-blue-600 font-medium truncate flex-1 mr-2">
-                        📡 {download.speed ? formatSpeed(download.speed) : 'Initializing...'}
-                      </span>
-                      <span className="text-gray-600 font-medium text-right whitespace-nowrap">
-                        {download.progress < 1 ? 'Starting...' : 
-                         download.progress < 5 ? 'Connecting...' : 
-                         download.progress < 99 ? 'Downloading...' : 
-                         'Finalizing...'}
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
-              
-              {/* Completed status */}
-              {download.status === 'completed' && (
-                <div className="flex items-center gap-2 text-green-700 font-semibold text-xs sm:text-sm bg-green-50 p-2 rounded-md">
-                  <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                  <span className="truncate">✅ Download complete - Saved to Downloads folder</span>
-                </div>
-              )}
-              
-              {/* Error status */}
-              {download.status === 'error' && download.error && (
-                <div className="flex items-center gap-2 text-red-700 text-xs sm:text-sm bg-red-50 p-2 rounded-md">
-                  <XCircle className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                  <div className="flex-1 truncate" title={download.error}>
-                    ❌ {download.error.length > 35 ? download.error.substring(0, 35) + '...' : download.error}
-                  </div>
-                </div>
+              {onRemove && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onRemove(download.id)}
+                  className="h-6 w-6 p-0 ml-2 flex-shrink-0"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
               )}
             </div>
           </CardContent>

@@ -1,9 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { Download, CheckCircle, XCircle, AlertCircle, Pause, Play, X } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { 
+  Download, 
+  Pause, 
+  Play, 
+  X, 
+  CheckCircle, 
+  AlertCircle, 
+  Clock,
+  FileText,
+  Archive
+} from 'lucide-react';
 
 interface DownloadItem {
   id: string;
@@ -21,222 +31,199 @@ interface DownloadProgressModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   downloads: DownloadItem[];
-  onCancel?: () => void;
-  onPause?: () => void;
-  onResume?: () => void;
-  isPaused?: boolean;
+  onCancel: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  isPaused: boolean;
   title?: string;
 }
 
-export const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
+const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
   open,
   onOpenChange,
   downloads,
   onCancel,
   onPause,
   onResume,
-  isPaused = false,
+  isPaused,
   title = "Download Progress"
 }) => {
-  const { toast } = useToast();
-  const [startTime] = useState(Date.now());
+  const completedCount = downloads.filter(d => d.status === 'completed').length;
+  const errorCount = downloads.filter(d => d.status === 'error').length;
+  const downloadingCount = downloads.filter(d => d.status === 'downloading').length;
+  const pendingCount = downloads.filter(d => d.status === 'pending').length;
+  const pausedCount = downloads.filter(d => d.status === 'paused').length;
 
-  // Calculate overall progress
   const totalProgress = downloads.length > 0 
-    ? downloads.reduce((sum, item) => sum + item.progress, 0) / downloads.length 
+    ? Math.round(downloads.reduce((sum, d) => sum + d.progress, 0) / downloads.length)
     : 0;
 
-  const completedCount = downloads.filter(item => item.status === 'completed').length;
-  const errorCount = downloads.filter(item => item.status === 'error').length;
-  const downloadingCount = downloads.filter(item => item.status === 'downloading').length;
-
-  // Calculate total download speed
+  const totalSize = downloads.reduce((sum, d) => sum + (d.size || 0), 0);
+  const downloadedSize = downloads.reduce((sum, d) => sum + (d.downloadedSize || 0), 0);
   const totalSpeed = downloads
-    .filter(item => item.status === 'downloading' && item.speed)
-    .reduce((sum, item) => sum + (item.speed || 0), 0);
+    .filter(d => d.status === 'downloading' && d.speed)
+    .reduce((sum, d) => sum + (d.speed || 0), 0);
 
-  // Format file size
-  const formatFileSize = (bytes: number) => {
+  const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B';
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  // Format speed
   const formatSpeed = (bytesPerSecond: number) => {
-    return formatFileSize(bytesPerSecond) + '/s';
+    return formatBytes(bytesPerSecond) + '/s';
   };
 
-  // Estimate time remaining
-  const getTimeRemaining = () => {
-    if (totalSpeed === 0 || totalProgress >= 100) return 'Calculating...';
-    
-    const remainingItems = downloads.filter(item => item.status !== 'completed' && item.status !== 'error');
-    const estimatedSeconds = remainingItems.length * 2; // Rough estimate
-    
-    if (estimatedSeconds < 60) return `${estimatedSeconds}s remaining`;
-    const minutes = Math.floor(estimatedSeconds / 60);
-    const seconds = estimatedSeconds % 60;
-    return `${minutes}m ${seconds}s remaining`;
-  };
-
-  // Get status icon
-  const getStatusIcon = (status: DownloadItem['status']) => {
+  const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
         return <CheckCircle className="h-4 w-4 text-green-500" />;
       case 'error':
-        return <XCircle className="h-4 w-4 text-red-500" />;
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
       case 'downloading':
-        return <Download className="h-4 w-4 text-blue-500 animate-bounce" />;
+        return <Download className="h-4 w-4 text-blue-500 animate-pulse" />;
       case 'paused':
         return <Pause className="h-4 w-4 text-yellow-500" />;
       default:
-        return <AlertCircle className="h-4 w-4 text-gray-400" />;
+        return <Clock className="h-4 w-4 text-gray-400" />;
     }
   };
 
-  // Auto-close when all downloads complete
-  useEffect(() => {
-    if (downloads.length > 0 && completedCount === downloads.length && errorCount === 0) {
-      setTimeout(() => {
-        toast({
-          title: "Downloads Complete",
-          description: `Successfully downloaded ${completedCount} files`,
-        });
-        onOpenChange(false);
-      }, 2000);
-    }
-  }, [completedCount, downloads.length, errorCount, toast, onOpenChange]);
-
-  const handleClose = () => {
-    if (downloadingCount > 0) {
-      // Show confirmation for active downloads
-      if (window.confirm('Downloads are in progress. Are you sure you want to cancel?')) {
-        onCancel?.();
-        onOpenChange(false);
-      }
-    } else {
-      onOpenChange(false);
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <Badge variant="default" className="bg-green-100 text-green-800">Completed</Badge>;
+      case 'error':
+        return <Badge variant="destructive">Error</Badge>;
+      case 'downloading':
+        return <Badge variant="default" className="bg-blue-100 text-blue-800">Downloading</Badge>;
+      case 'paused':
+        return <Badge variant="secondary">Paused</Badge>;
+      default:
+        return <Badge variant="outline">Pending</Badge>;
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden mx-4 sm:mx-auto">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Download className="h-5 w-5" />
+            <Archive className="h-5 w-5" />
             {title}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="flex-1 overflow-hidden flex flex-col space-y-4">
           {/* Overall Progress */}
           <div className="space-y-2">
             <div className="flex justify-between items-center">
-              <span className="text-sm font-medium">
-                Overall Progress ({completedCount}/{downloads.length})
-              </span>
-              <span className="text-sm text-muted-foreground">
-                {Math.round(totalProgress)}%
-              </span>
+              <span className="text-sm font-medium">Overall Progress</span>
+              <span className="text-sm text-gray-600">{totalProgress}%</span>
             </div>
-            <Progress value={totalProgress} className="h-3" />
-            
-            {/* Stats Row */}
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>
-                {downloadingCount > 0 && (
-                  <>Speed: {formatSpeed(totalSpeed)} • </>
-                )}
-                {errorCount > 0 && (
-                  <span className="text-red-500">{errorCount} errors • </span>
-                )}
-                {getTimeRemaining()}
-              </span>
-              <span>
-                Elapsed: {Math.floor((Date.now() - startTime) / 1000)}s
-              </span>
+            <Progress value={totalProgress} className="h-2" />
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>{completedCount} of {downloads.length} completed</span>
+              {totalSpeed > 0 && (
+                <span>{formatSpeed(totalSpeed)}</span>
+              )}
             </div>
           </div>
 
-          {/* Individual Downloads */}
-          <div className="max-h-64 overflow-y-auto space-y-2 border rounded-lg p-2 sm:p-3">
-            {downloads.map((download) => (
-              <div key={download.id} className="space-y-1">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    {getStatusIcon(download.status)}
-                    <span className="text-xs sm:text-sm truncate flex-1" title={download.filename}>
-                      {download.filename}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 sm:gap-2 text-xs text-muted-foreground flex-shrink-0">
-                    {download.status === 'downloading' && download.speed && (
-                      <span className="hidden sm:inline">📡 {formatSpeed(download.speed)}</span>
-                    )}
-                    <span className="font-medium">{Math.round(download.progress)}%</span>
-                    {download.status === 'downloading' && (
-                      <span className="text-gray-600 hidden sm:inline">
-                        {download.progress < 1 ? 'Starting...' : 
-                         download.progress < 5 ? 'Connecting...' : 
-                         download.progress < 99 ? 'Downloading...' : 
-                         'Finalizing...'}
+          {/* Download Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <div className="space-y-1">
+              <div className="text-2xl font-bold text-green-600">{completedCount}</div>
+              <div className="text-xs text-gray-600">Completed</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-2xl font-bold text-blue-600">{downloadingCount}</div>
+              <div className="text-xs text-gray-600">Downloading</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-2xl font-bold text-yellow-600">{pausedCount + pendingCount}</div>
+              <div className="text-xs text-gray-600">Pending</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-2xl font-bold text-red-600">{errorCount}</div>
+              <div className="text-xs text-gray-600">Errors</div>
+            </div>
+          </div>
+
+          {/* Data Transfer Info */}
+          {totalSize > 0 && (
+            <div className="bg-gray-50 rounded-lg p-3 space-y-1">
+              <div className="flex justify-between text-sm">
+                <span>Downloaded:</span>
+                <span>{formatBytes(downloadedSize)} of {formatBytes(totalSize)}</span>
+              </div>
+              <Progress 
+                value={totalSize > 0 ? (downloadedSize / totalSize) * 100 : 0} 
+                className="h-1" 
+              />
+            </div>
+          )}
+
+          {/* Download List */}
+          <div className="flex-1 overflow-hidden">
+            <div className="text-sm font-medium mb-2">Download Queue</div>
+            <div className="overflow-y-auto max-h-48 space-y-2 pr-2">
+              {downloads.map((download) => (
+                <div key={download.id} className="flex items-center space-x-3 p-2 bg-gray-50 rounded-lg">
+                  {getStatusIcon(download.status)}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium truncate" title={download.filename}>
+                        {download.filename}
                       </span>
+                      {getStatusBadge(download.status)}
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <Progress value={download.progress} className="h-1 flex-1 mr-2" />
+                      <span className="text-xs text-gray-500 whitespace-nowrap">
+                        {download.progress}%
+                      </span>
+                    </div>
+                    {download.status === 'downloading' && download.speed && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        {formatSpeed(download.speed)}
+                      </div>
+                    )}
+                    {download.status === 'error' && download.error && (
+                      <div className="text-xs text-red-500 mt-1 truncate" title={download.error}>
+                        {download.error}
+                      </div>
                     )}
                   </div>
                 </div>
-                
-                {download.status !== 'pending' && (
-                  <Progress 
-                    value={download.progress} 
-                    className="h-1 sm:h-1.5"
-                  />
-                )}
-                
-                {download.error && (
-                  <p className="text-xs text-red-500 truncate" title={download.error}>
-                    Error: {download.error}
-                  </p>
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row justify-between gap-2">
-            <div className="flex gap-2">
-              {downloadingCount > 0 && (
-                <>
-                  {isPaused ? (
-                    <Button variant="outline" size="sm" onClick={onResume} className="flex-1 sm:flex-none">
-                      <Play className="h-4 w-4 mr-1" />
-                      Resume
-                    </Button>
-                  ) : (
-                    <Button variant="outline" size="sm" onClick={onPause} className="flex-1 sm:flex-none">
-                      <Pause className="h-4 w-4 mr-1" />
-                      Pause
-                    </Button>
-                  )}
-                </>
-              )}
-            </div>
-            
-            <div className="flex gap-2">
-              {downloadingCount > 0 && (
-                <Button variant="destructive" size="sm" onClick={onCancel} className="flex-1 sm:flex-none">
-                  <X className="h-4 w-4 mr-1" />
-                  Cancel All
+          <div className="flex justify-between pt-4 border-t">
+            <div className="flex space-x-2">
+              {isPaused ? (
+                <Button onClick={onResume} variant="outline" size="sm">
+                  <Play className="h-4 w-4 mr-2" />
+                  Resume
+                </Button>
+              ) : (
+                <Button onClick={onPause} variant="outline" size="sm">
+                  <Pause className="h-4 w-4 mr-2" />
+                  Pause
                 </Button>
               )}
-              <Button variant="outline" size="sm" onClick={handleClose} className="flex-1 sm:flex-none">
-                {downloadingCount > 0 ? 'Hide' : 'Close'}
+              <Button onClick={onCancel} variant="outline" size="sm">
+                <X className="h-4 w-4 mr-2" />
+                Cancel
               </Button>
             </div>
+            <Button onClick={() => onOpenChange(false)} variant="outline" size="sm">
+              Close
+            </Button>
           </div>
         </div>
       </DialogContent>

@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Photo } from '@shared/types';
 import { imagePreloader, getOptimizedImageUrl, getDisplayImageUrl, getDownloadImageUrl } from '@/utils/imagePreloader';
+import { useSinglePhotoDownload } from '@/hooks/useSinglePhotoDownload';
+import SingleDownloadProgress from '@/components/SingleDownloadProgress';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import ProgressiveImage from './ProgressiveImage';
@@ -45,6 +47,9 @@ const OptimizedPhotoGallery = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const { currentUser } = useAuth();
+  
+  // Single photo download hook
+  const { downloadPhoto, activeDownloads } = useSinglePhotoDownload();
   const { toast } = useToast();
 
   // Multi-select functionality state
@@ -373,6 +378,9 @@ const OptimizedPhotoGallery = ({
           Showing {visibleRange.end} of {photos.length} photos
         </div>
       </div>
+      
+      {/* Single Download Progress Indicators */}
+      <SingleDownloadProgress downloads={activeDownloads} />
     </div>
   );
 };
@@ -487,22 +495,11 @@ const PhotoCard = ({
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      // Use original quality URL for downloads
-      const originalUrl = getDownloadImageUrl(photo.url);
-      const response = await fetch(originalUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = photo.filename || `photo-${photo.id}`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error('Error downloading photo:', error);
-    }
+    const originalUrl = getDownloadImageUrl(photo.url);
+    const filename = photo.filename || `photo-${photo.id}.jpg`;
+    
+    // Use the new download system with progress
+    await downloadPhoto(photo.id, originalUrl, filename);
   };
 
   const handleSaveToProfile = (e: React.MouseEvent) => {

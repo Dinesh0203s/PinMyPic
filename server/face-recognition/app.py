@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 face_processor = None
 
-# Connection pool for better performance
-MAX_WORKERS = 6
+# Connection pool optimized for RTX 3060
+MAX_WORKERS = 24  # Maximum parallel processing for RTX 3060
 processing_semaphore = None
 
 def init_semaphore():
@@ -209,7 +209,7 @@ def process_photo():
     
     # Global queue for processing requests
     if not hasattr(app, 'processing_queue'):
-        app.processing_queue = queue.Queue(maxsize=50)  # Limit queue size
+        app.processing_queue = queue.Queue(maxsize=128)  # Increased queue size for RTX 3060
         app.processing_threads = []
         # Start worker threads
         for i in range(MAX_WORKERS):
@@ -218,7 +218,7 @@ def process_photo():
             app.processing_threads.append(worker)
     
     # Quick queue size check
-    if app.processing_queue.qsize() > 40:
+    if app.processing_queue.qsize() > 100:  # Higher threshold for RTX 3060
         return jsonify({'error': 'Service overloaded, please try again later'}), 503
     
     try:

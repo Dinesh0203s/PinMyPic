@@ -2422,33 +2422,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Use the face recognition service to compare faces
-      const matches = await compareFaces(selfieData, eventPhotos);
-      
-      // Get the matched photos with similarity scores
-      const matchedPhotos: any[] = [];
-      const matchThreshold = 0.6; // 60% similarity threshold
-      
-      for (const match of matches) {
-        if (match.similarity >= matchThreshold) {
-          const photo = eventPhotos.find(p => p.id === match.photoId);
-          if (photo) {
-            matchedPhotos.push({
-              ...photo,
-              similarity: match.similarity
-            });
+      try {
+        const matches = await compareFaces(selfieData, eventPhotos);
+        
+        // Get the matched photos with similarity scores
+        const matchedPhotos: any[] = [];
+        const matchThreshold = 0.6; // 60% similarity threshold
+        
+        for (const match of matches) {
+          if (match.similarity >= matchThreshold) {
+            const photo = eventPhotos.find(p => p.id === match.photoId);
+            if (photo) {
+              matchedPhotos.push({
+                ...photo,
+                similarity: match.similarity
+              });
+            }
           }
         }
+        
+        // Sort by similarity score (highest first)
+        matchedPhotos.sort((a, b) => b.similarity - a.similarity);
+        
+        res.json({
+          success: true,
+          matchedPhotos,
+          totalPhotos: eventPhotos.length,
+          matchesFound: matchedPhotos.length
+        });
+      } catch (faceError: any) {
+        // Handle "no face detected" error specifically
+        if (faceError.message === 'NO_FACE_DETECTED') {
+          return res.json({
+            success: true,
+            noFaceDetected: true,
+            matchedPhotos: [],
+            totalPhotos: eventPhotos.length,
+            matchesFound: 0,
+            guidance: {
+              title: "No Face Detected",
+              message: "We couldn't detect a clear face in your photo. Please try again with a better photo.",
+              tips: [
+                "Make sure your face is clearly visible",
+                "Ensure good lighting on your face",
+                "Look directly at the camera",
+                "Remove sunglasses or face coverings",
+                "Take the photo from a closer distance"
+              ]
+            }
+          });
+        }
+        
+        // Re-throw other errors to be handled by the outer catch block
+        throw faceError;
       }
-      
-      // Sort by similarity score (highest first)
-      matchedPhotos.sort((a, b) => b.similarity - a.similarity);
-      
-      res.json({
-        success: true,
-        matchedPhotos,
-        totalPhotos: eventPhotos.length,
-        matchesFound: matchedPhotos.length
-      });
       
     } catch (error) {
       console.error('Face recognition error:', error);

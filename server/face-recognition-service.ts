@@ -301,7 +301,23 @@ export async function compareFaces(selfieData: string, photos: Array<Photo & { f
     });
 
     if (!response.ok) {
-      throw new Error(`Face comparison failed: ${response.statusText}`);
+      // Try to get the detailed error message from the Python service
+      let errorMessage = `Face comparison failed: ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        if (errorData.error) {
+          errorMessage = errorData.error;
+        }
+      } catch (parseError) {
+        // If we can't parse the error response, use the status text
+      }
+      
+      // Check if it's a "no face detected" error
+      if (response.status === 400 && errorMessage.toLowerCase().includes('no face detected')) {
+        throw new Error('NO_FACE_DETECTED');
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const result = await response.json() as { matches?: Array<{ photoId: string; similarity: number }> };

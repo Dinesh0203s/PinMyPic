@@ -36,21 +36,20 @@ const ProgressiveImage = ({
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Generate optimized URLs
+  // Generate optimized URLs based on usage context
   const optimizedSrc = useMemo(() => {
-    // For GridFS images, append quality parameter to the original URL
+    // For GridFS images, use WebP with 85% quality for thumbnails
     if (src.startsWith('/api/images/')) {
-      return `${src}?quality=85`;
+      return `${src}?quality=85&format=webp`;
     }
     return getDisplayImageUrl(src);
   }, [src]);
   
   const thumb = useMemo(() => {
     if (thumbnailSrc) return thumbnailSrc;
-    // For GridFS images, the thumbnailUrl should already point to pre-generated WebP thumbnails
-    // If not, fall back to on-the-fly thumbnail generation
+    // For GridFS images, use WebP with 85% quality for thumbnails
     if (src.startsWith('/api/images/')) {
-      return `${src}?thumbnail=true&quality=60`;
+      return `${src}?thumbnail=true&quality=85&format=webp`;
     }
     return getDisplayImageUrl(src, true);
   }, [src, thumbnailSrc]);
@@ -79,7 +78,7 @@ const ProgressiveImage = ({
     return () => observer.disconnect();
   }, [loading]);
 
-  // Simplified loading logic to prevent browser freezing
+  // Optimized loading logic - only load one image based on context
   useEffect(() => {
     if (!isInView) return;
 
@@ -95,15 +94,14 @@ const ProgressiveImage = ({
       });
     };
 
-    // Load thumbnail first, then full res
-    loadImage(thumb)
+    // For thumbnails, only load the thumbnail version (85% quality WebP)
+    // For fullscreen, load the full quality version
+    const imageToLoad = priority === 'high' ? optimizedSrc : thumb;
+    
+    loadImage(imageToLoad)
       .then(() => {
         if (isCancelled) return;
         setImageState('loaded');
-        return loadImage(optimizedSrc);
-      })
-      .then(() => {
-        if (isCancelled) return;
         setShowFullRes(true);
         onLoad?.();
       })
@@ -116,7 +114,7 @@ const ProgressiveImage = ({
     return () => {
       isCancelled = true;
     };
-  }, [isInView, thumb, optimizedSrc, onLoad, onError]);
+  }, [isInView, thumb, optimizedSrc, onLoad, onError, priority]);
 
   // Generate placeholder with proper aspect ratio
   const placeholderStyle = useMemo(() => {
@@ -179,28 +177,15 @@ const ProgressiveImage = ({
 
   return (
     <div ref={containerRef} className={`relative ${className}`} style={style}>
-      {/* Thumbnail layer */}
+      {/* Single optimized image */}
       {imageState === 'loaded' && (
         <img
-          src={thumb}
-          alt=""
-          className={`absolute inset-0 w-full h-full transition-opacity duration-300 ${
-            showFullRes ? 'opacity-0' : 'opacity-100'
-          } ${blur && !showFullRes ? 'filter blur-sm' : ''}`}
-          style={imageStyle}
-          loading="eager"
-        />
-      )}
-
-      {/* Full resolution layer */}
-      {showFullRes && (
-        <img
           ref={imgRef}
-          src={optimizedSrc}
+          src={priority === 'high' ? optimizedSrc : thumb}
           alt={alt}
           className={`w-full h-full transition-opacity duration-300 ${
-            showFullRes ? 'opacity-100' : 'opacity-0'
-          }`}
+            showFullRes ? 'opacity-100' : 'opacity-100'
+          } ${blur && priority !== 'high' ? 'filter blur-sm' : ''}`}
           style={imageStyle}
           sizes={sizes}
           loading="eager"

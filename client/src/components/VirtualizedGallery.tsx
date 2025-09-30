@@ -4,6 +4,7 @@ import { getDisplayImageUrl, getDownloadImageUrl } from '@/utils/imagePreloader'
 import { Download, Eye, Heart, HeartOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useVirtualization } from '@/hooks/useVirtualization';
+import ProgressiveImage from './ProgressiveImage';
 
 interface VirtualizedGalleryProps {
   photos: Photo[];
@@ -62,28 +63,15 @@ export const VirtualizedGallery = ({
         style={{ height: ITEM_HEIGHT - 20, margin: '10px' }}
       >
         <div className="relative h-full">
-          <img
-            src={getDisplayImageUrl(photo.url || '', true)}
+          <ProgressiveImage
+            src={photo.url || ''}
             alt={`Photo ${index + 1}`}
-            className={`w-full h-full object-cover transition-opacity duration-300 ${
-              isLoaded ? 'opacity-100' : 'opacity-0'
-            }`}
+            className="w-full h-full object-cover"
+            priority="low"
             onLoad={() => handleImageLoad(photo.id)}
             onError={() => handleImageError(photo.id)}
             loading="lazy"
           />
-          
-          {!isLoaded && !hasError && (
-            <div className="absolute inset-0 bg-gray-200 animate-pulse flex items-center justify-center">
-              <div className="w-8 h-8 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          )}
-          
-          {hasError && (
-            <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
-              <div className="text-gray-400 text-sm">Image unavailable</div>
-            </div>
-          )}
 
           {/* Hover overlay */}
           <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">

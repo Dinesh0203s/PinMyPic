@@ -213,7 +213,7 @@ const Events = () => {
       id: `${photo.id}-${index}`,
       filename: photo.filename || `photo_${index + 1}.jpg`,
       url: photo.url.includes('/api/images/') 
-        ? `${photo.url}?download=true&quality=90`
+        ? `${photo.url}?download=true`
         : photo.url
     }));
 

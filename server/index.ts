@@ -108,7 +108,7 @@ app.use('/uploads', express.static(uploadsDir));
 app.get('/api/images/:fileId', async (req, res) => {
   try {
     const { fileId } = req.params;
-    const { thumbnail = 'false', quality = '85', download = 'false' } = req.query;
+    const { thumbnail = 'false', quality = '85', download = 'false', format = 'webp' } = req.query;
     const isThumbnail = thumbnail === 'true';
     const isDownload = download === 'true';
     const qualityNum = Math.min(Math.max(parseInt(quality as string), 20), 100);
@@ -258,11 +258,11 @@ app.get('/api/images/:fileId', async (req, res) => {
         }
         
         // Convert to WebP if supported for better compression
-        if (acceptsWebP) {
-          // For thumbnails, use higher quality; for regular images, use quality-based compression
+        if (acceptsWebP && format === 'webp') {
+          // For thumbnails, use 85% quality; for regular images, use requested quality
           const webpOptions = isThumbnail 
-            ? { quality: 85, effort: 3, smartSubsample: true } // Higher quality for thumbnails
-            : { quality: qualityNum, effort: 4, smartSubsample: true }; // Quality-based for regular images
+            ? { quality: 85, effort: 3, smartSubsample: true } // 85% quality for thumbnails
+            : { quality: qualityNum, effort: 4, smartSubsample: true }; // Requested quality for regular images
             
           const webpBuffer = await processedImage
             .webp(webpOptions)
@@ -270,7 +270,7 @@ app.get('/api/images/:fileId', async (req, res) => {
           
           res.set('Content-Type', 'image/webp');
           res.set('Content-Length', webpBuffer.length.toString());
-          res.set('X-Image-Type', isThumbnail ? 'thumbnail-webp-lossless' : 'compressed-webp');
+          res.set('X-Image-Type', isThumbnail ? 'thumbnail-webp-85' : 'compressed-webp');
           res.set('X-Image-Size', `${webpBuffer.length}`);
           res.send(webpBuffer);
         } else {

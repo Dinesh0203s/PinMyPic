@@ -36,22 +36,22 @@ const ProgressiveImage = ({
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Generate optimized URLs based on usage context
+  // Generate optimized URLs for progressive loading
   const optimizedSrc = useMemo(() => {
-    // For GridFS images, use WebP with 85% quality for thumbnails
+    // For GridFS images, use full quality WebP for final image
     if (src.startsWith('/api/images/')) {
-      return `${src}?quality=85&format=webp`;
+      return `${src}?quality=100&format=webp`;
     }
     return getDisplayImageUrl(src);
   }, [src]);
   
   const thumb = useMemo(() => {
     if (thumbnailSrc) return thumbnailSrc;
-    // For GridFS images, use original image without any processing
+    // For GridFS images, use small thumbnail with blur effect
     if (src.startsWith('/api/images/')) {
-      return src;
+      return `${src}?thumbnail=true&quality=60&format=webp`;
     }
-    return getDisplayImageUrl(src, false);
+    return getDisplayImageUrl(src, true);
   }, [src, thumbnailSrc]);
 
   // Intersection Observer for lazy loading
@@ -78,14 +78,14 @@ const ProgressiveImage = ({
     return () => observer.disconnect();
   }, [loading]);
 
-  // Optimized loading logic - only load one image based on context
+  // Progressive loading with blur-up technique
   useEffect(() => {
     if (!isInView) return;
 
     let isCancelled = false;
 
-    // Simple image loading without complex preloader that might cause issues
-    const loadImage = (src: string) => {
+    // Load thumbnail first with blur effect
+    const loadThumbnail = (src: string) => {
       return new Promise<void>((resolve, reject) => {
         const img = new Image();
         img.onload = () => resolve();
@@ -94,14 +94,28 @@ const ProgressiveImage = ({
       });
     };
 
-    // For thumbnails, only load the thumbnail version (85% quality WebP)
-    // For fullscreen, load the full quality version
-    const imageToLoad = priority === 'high' ? optimizedSrc : thumb;
-    
-    loadImage(imageToLoad)
+    // Load full resolution image
+    const loadFullImage = (src: string) => {
+      return new Promise<void>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve();
+        img.onerror = () => reject();
+        img.src = src;
+      });
+    };
+
+    // Start with thumbnail (blurred)
+    loadThumbnail(thumb)
       .then(() => {
         if (isCancelled) return;
         setImageState('loaded');
+        // Keep blur effect for now
+        
+        // Then load full resolution
+        return loadFullImage(optimizedSrc);
+      })
+      .then(() => {
+        if (isCancelled) return;
         setShowFullRes(true);
         onLoad?.();
       })
@@ -177,14 +191,27 @@ const ProgressiveImage = ({
 
   return (
     <div ref={containerRef} className={`relative ${className}`} style={style}>
-      {/* Single optimized image */}
+      {/* Blurred thumbnail layer */}
       {imageState === 'loaded' && (
         <img
+          src={thumb}
+          alt=""
+          className={`absolute inset-0 w-full h-full transition-opacity duration-500 ${
+            showFullRes ? 'opacity-0' : 'opacity-100'
+          } filter blur-sm`}
+          style={imageStyle}
+          loading="eager"
+        />
+      )}
+
+      {/* Full resolution layer */}
+      {showFullRes && (
+        <img
           ref={imgRef}
-          src={priority === 'high' ? optimizedSrc : thumb}
+          src={optimizedSrc}
           alt={alt}
-          className={`w-full h-full transition-opacity duration-300 ${
-            showFullRes ? 'opacity-100' : 'opacity-100'
+          className={`w-full h-full transition-opacity duration-500 ${
+            showFullRes ? 'opacity-100' : 'opacity-0'
           }`}
           style={imageStyle}
           sizes={sizes}

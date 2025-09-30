@@ -1109,9 +1109,18 @@ export class MongoDBStorage implements IStorage {
         return false;
       }
 
+      // Delete the file and all its chunks
       await bucket.delete(objectId);
-      console.log(`Successfully deleted image from GridFS: ${fileId}`);
-      return true;
+      
+      // Verify deletion by checking if file still exists
+      const remainingFiles = await bucket.find({ _id: objectId }).toArray();
+      if (remainingFiles.length === 0) {
+        console.log(`Successfully deleted image and chunks from GridFS: ${fileId}`);
+        return true;
+      } else {
+        console.warn(`File deletion may have failed - file still exists: ${fileId}`);
+        return false;
+      }
     } catch (error) {
       console.error(`Error deleting image from GridFS: ${fileId}`, error);
       return false;

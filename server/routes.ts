@@ -1120,7 +1120,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const fileId = photo.url.replace('/api/images/', '');
           try {
             const { mongoStorage } = await import('./mongo-storage');
-            await mongoStorage.deleteImageFromGridFS(fileId);
+            
+            // Delete main file
+            const mainFileDeleted = await mongoStorage.deleteImageFromGridFS(fileId);
+            console.log(`Main file deletion result: ${mainFileDeleted ? 'success' : 'failed'} for ${fileId}`);
+            
+            // Also delete thumbnail if it exists and is different from main file
+            if (photo.thumbnailId && photo.thumbnailId !== fileId) {
+              const thumbnailDeleted = await mongoStorage.deleteImageFromGridFS(photo.thumbnailId);
+              console.log(`Thumbnail deletion result: ${thumbnailDeleted ? 'success' : 'failed'} for ${photo.thumbnailId}`);
+            }
 
           } catch (fileError) {
             console.error('Error deleting GridFS file:', fileError);

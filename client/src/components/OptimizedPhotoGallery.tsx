@@ -564,6 +564,7 @@ const PhotoCard = ({
         onLoad={onLoad}
         onError={onError}
         loading="lazy"
+        blur={false}
       />
       
       {/* Multi-select checkbox overlay */}

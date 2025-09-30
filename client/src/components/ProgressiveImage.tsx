@@ -47,11 +47,11 @@ const ProgressiveImage = ({
   
   const thumb = useMemo(() => {
     if (thumbnailSrc) return thumbnailSrc;
-    // For GridFS images, use WebP with 85% quality for thumbnails
+    // For GridFS images, use original image without any processing
     if (src.startsWith('/api/images/')) {
-      return `${src}?thumbnail=true&quality=85&format=webp`;
+      return src;
     }
-    return getDisplayImageUrl(src, true);
+    return getDisplayImageUrl(src, false);
   }, [src, thumbnailSrc]);
 
   // Intersection Observer for lazy loading
@@ -185,7 +185,7 @@ const ProgressiveImage = ({
           alt={alt}
           className={`w-full h-full transition-opacity duration-300 ${
             showFullRes ? 'opacity-100' : 'opacity-100'
-          } ${blur && priority !== 'high' ? 'filter blur-sm' : ''}`}
+          }`}
           style={imageStyle}
           sizes={sizes}
           loading="eager"

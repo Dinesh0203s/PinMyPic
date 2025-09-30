@@ -348,13 +348,10 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
         )}
         
         {/* Progressive Image with optimized loading */}
-        <ProgressiveImage
+        <img
           src={photo.url}
-          thumbnailSrc={photo.thumbnailUrl} // Use pre-generated thumbnail URL
           alt={photo.filename || 'Photo'}
           className="w-full h-full object-cover transition-all duration-300 group-hover:scale-110"
-          priority="low"
-          aspectRatio={1}
           onLoad={onLoad}
           onError={onError}
           loading="lazy"

@@ -71,6 +71,7 @@ export const VirtualizedGallery = ({
             onLoad={() => handleImageLoad(photo.id)}
             onError={() => handleImageError(photo.id)}
             loading="lazy"
+            blur={false}
           />
 
           {/* Hover overlay */}

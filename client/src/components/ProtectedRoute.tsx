@@ -77,10 +77,15 @@ const ProtectedRoute = ({ children, requireAdmin = false, showSignInMessage = tr
 
   // Check if user has admin access
   if (requireAdmin) {
+    // Wait for userData to be loaded before checking admin access
+    if (!userData) {
+      return <LoadingSpinner message="Loading user data..." />;
+    }
+    
     const hasAdminAccess = hasAdminDashboardAccess(userData);
     
     if (!hasAdminAccess) {
-      console.log('Admin access denied for user:', userData);
+      console.log('Admin access denied for user');
       return <Navigate to="/" replace />;
     }
   }

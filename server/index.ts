@@ -2,6 +2,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from "url";
+import { getOwnerPermissions } from './utils/permissions';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,7 +46,7 @@ async function initializeMongoDB() {
         firebaseUid: 'admin_owner',
         isAdmin: true,
         adminRole: 'owner',
-        adminPermissions: ['events', 'bookings', 'packages', 'photos', 'contacts', 'users_view', 'users_manage', 'qr_codes'],
+        adminPermissions: getOwnerPermissions(),
         phone: '',
         isActive: true
       });

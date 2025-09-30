@@ -110,7 +110,7 @@ const Profile = () => {
       return response.json();
     },
     onSuccess: async (updatedUser) => {
-      console.log('Profile updated successfully:', updatedUser);
+      console.log('Profile updated successfully');
       
       // Refresh user data in auth context
       await refreshUserData();

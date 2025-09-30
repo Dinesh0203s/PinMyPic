@@ -397,14 +397,14 @@ const AdminRoleManagement: React.FC<AdminRoleManagementProps> = ({ currentUser, 
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1 max-w-xs">
-                        {(user.adminPermissions || getAdminPermissions(user.adminRole)).slice(0, 3).map((permission, permIndex) => (
+                        {getAdminPermissions(user.adminRole).slice(0, 3).map((permission, permIndex) => (
                           <Badge key={`${user.id || user.firebaseUid}-${permission}-${permIndex}`} variant="secondary" className="text-xs">
                             {permission}
                           </Badge>
                         ))}
-                        {(user.adminPermissions || getAdminPermissions(user.adminRole)).length > 3 && (
+                        {getAdminPermissions(user.adminRole).length > 3 && (
                           <Badge variant="secondary" className="text-xs">
-                            +{(user.adminPermissions || getAdminPermissions(user.adminRole)).length - 3} more
+                            +{getAdminPermissions(user.adminRole).length - 3} more
                           </Badge>
                         )}
                       </div>
@@ -479,14 +479,14 @@ const AdminRoleManagement: React.FC<AdminRoleManagementProps> = ({ currentUser, 
                   <div className="mb-3">
                     <div className="text-xs text-gray-600 mb-2">Permissions:</div>
                     <div className="flex flex-wrap gap-1">
-                      {(user.adminPermissions || getAdminPermissions(user.adminRole)).slice(0, 4).map((permission, permIndex) => (
+                      {getAdminPermissions(user.adminRole).slice(0, 4).map((permission, permIndex) => (
                         <Badge key={`${user.id || user.firebaseUid}-${permission}-${permIndex}`} variant="secondary" className="text-xs">
                           {permission}
                         </Badge>
                       ))}
-                      {(user.adminPermissions || getAdminPermissions(user.adminRole)).length > 4 && (
+                      {getAdminPermissions(user.adminRole).length > 4 && (
                         <Badge variant="secondary" className="text-xs">
-                          +{(user.adminPermissions || getAdminPermissions(user.adminRole)).length - 4} more
+                          +{getAdminPermissions(user.adminRole).length - 4} more
                         </Badge>
                       )}
                     </div>

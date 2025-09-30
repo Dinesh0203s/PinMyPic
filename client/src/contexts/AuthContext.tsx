@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (response.ok) {
         const user = await response.json();
-        console.log('Synced user data:', user);
+        console.log('User data synced successfully');
         setUserData(user);
       } else {
         console.error('Failed to sync user:', response.status, response.statusText);
@@ -125,10 +125,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
-      setLoading(false);
       
       if (user) {
+        // Keep loading true until userData is synced
         await syncUserWithDatabase(user);
+        setLoading(false);
         
         // Dismiss any authentication-related toasts
         // Signal to dismiss toasts by dispatching a custom event
@@ -145,6 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         setUserData(null);
+        setLoading(false);
       }
     });
 

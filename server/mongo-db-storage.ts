@@ -112,12 +112,12 @@ export class MongoDBStorage implements IStorage {
       ]);
       
       if (existingUserByEmail) {
-        console.log(`User with email ${user.email} already exists, returning existing user`);
+        console.log('User with email already exists, returning existing user');
         return existingUserByEmail;
       }
       
       if (existingUserByUid) {
-        console.log(`User with Firebase UID ${user.firebaseUid} already exists, returning existing user`);
+        console.log('User with Firebase UID already exists, returning existing user');
         return existingUserByUid;
       }
 
@@ -135,7 +135,7 @@ export class MongoDBStorage implements IStorage {
         ...userData,
       };
       
-      console.log(`Created new user with email ${user.email} and Firebase UID ${user.firebaseUid}`);
+      console.log('Created new user successfully');
       return newUser;
     } catch (error) {
       console.error('Error creating user:', error);

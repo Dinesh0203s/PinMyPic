@@ -8,10 +8,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Shield, Users, UserCheck, UserX, Edit3, Trash2, Plus, Mail, Calendar, Activity, Crown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { getAdminPermissions } from '@/utils/adminUtils';
 import type { User } from '@shared/types';
 
 interface AdminUsersManagementProps {
@@ -26,16 +28,42 @@ export function AdminUsersManagement({ currentUser }: AdminUsersManagementProps)
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [promoteDialogOpen, setPromoteDialogOpen] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<'admin' | 'moderator' | 'custom'>('admin');
+  const [customPermissions, setCustomPermissions] = useState<string[]>([]);
   const { toast } = useToast();
   const { currentUser: firebaseUser, refreshUserData } = useAuth();
 
   const isOwner = currentUser.adminRole === 'owner';
   const isAdmin = currentUser.isAdmin && (currentUser.adminRole === 'owner' || currentUser.adminRole === 'admin');
 
+  const allPermissions = [
+    { value: 'events', label: 'Manage Events', description: 'Create, edit, and delete events' },
+    { value: 'events_view', label: 'View Events', description: 'View events (read-only)' },
+    { value: 'bookings', label: 'Manage Bookings', description: 'View and manage all bookings' },
+    { value: 'packages', label: 'Manage Packages', description: 'Create and edit service packages' },
+    { value: 'photos', label: 'Manage Photos', description: 'Upload and manage event photos' },
+    { value: 'contacts', label: 'Manage Messages', description: 'View and respond to contact messages' },
+    { value: 'qr_codes', label: 'Manage QR Codes', description: 'Create and manage QR codes for events' },
+    { value: 'users', label: 'View Users', description: 'View user information' },
+    { value: 'users_manage', label: 'Manage Users', description: 'Promote/demote users and manage roles' }
+  ];
+
   useEffect(() => {
     fetchUsers();
     fetchAdminUsers();
   }, []);
+
+  // Auto-populate permissions when role changes
+  useEffect(() => {
+    if (selectedRole === 'custom') {
+      // Custom role - don't auto-populate, let user choose
+      return;
+    }
+    
+    // Auto-populate permissions for predefined roles
+    const defaultPermissions = getDefaultPermissions(selectedRole);
+    setCustomPermissions(defaultPermissions);
+  }, [selectedRole]);
 
   const getAuthHeaders = async (): Promise<Record<string, string>> => {
     if (!firebaseUser) return {};
@@ -93,7 +121,17 @@ export function AdminUsersManagement({ currentUser }: AdminUsersManagementProps)
     }
   };
 
-  const handlePromoteUser = async (userId: string, adminRole: 'admin' | 'moderator') => {
+  const handlePromoteUser = async (userId: string, adminRole: 'admin' | 'moderator' | 'custom', customPermissions: string[] = []) => {
+    // Validate custom role has permissions
+    if (adminRole === 'custom' && customPermissions.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please select at least one permission for the custom role.",
+      });
+      return;
+    }
+
     try {
       const headers = await getAuthHeaders();
       const response = await fetch(`/api/admin/users/${userId}/promote`, {
@@ -101,8 +139,8 @@ export function AdminUsersManagement({ currentUser }: AdminUsersManagementProps)
         headers,
         body: JSON.stringify({ 
           isAdmin: true, 
-          adminRole,
-          adminPermissions: getDefaultPermissions(adminRole)
+          adminRole: adminRole === 'custom' ? 'admin' : adminRole, // Map custom to admin for backend
+          adminPermissions: customPermissions.length > 0 ? customPermissions : getDefaultPermissions(adminRole)
         }),
       });
 
@@ -197,11 +235,13 @@ export function AdminUsersManagement({ currentUser }: AdminUsersManagementProps)
     }
   };
 
-  const getDefaultPermissions = (role: 'admin' | 'moderator'): string[] => {
+  const getDefaultPermissions = (role: 'admin' | 'moderator' | 'custom'): string[] => {
     if (role === 'admin') {
       return ['events', 'bookings', 'packages', 'photos', 'contacts', 'users_view'];
     } else if (role === 'moderator') {
       return ['events', 'bookings', 'photos', 'contacts'];
+    } else if (role === 'custom') {
+      return []; // Custom role starts with no permissions - user must select them
     }
     return [];
   };
@@ -347,31 +387,93 @@ export function AdminUsersManagement({ currentUser }: AdminUsersManagementProps)
                                             Promote
                                           </Button>
                                         </DialogTrigger>
-                                        <DialogContent className="mx-4 sm:mx-auto">
+                                        <DialogContent className="mx-4 sm:mx-auto max-w-2xl">
                                           <DialogHeader>
                                             <DialogTitle>Promote User</DialogTitle>
                                             <DialogDescription>
-                                              {selectedUser ? `Select the admin role for ${selectedUser.email}` : 'Select the admin role for the user'}
+                                              {selectedUser ? `Select the admin role and permissions for ${selectedUser.email}` : 'Select the admin role and permissions for the user'}
                                             </DialogDescription>
                                           </DialogHeader>
-                                          <div className="space-y-4">
-                                            <div className="grid grid-cols-2 gap-4">
-                                              <Button
-                                                onClick={() => selectedUser && handlePromoteUser(selectedUser.id, 'admin')}
-                                                className="flex flex-col items-center gap-2 h-20"
-                                              >
-                                                <Shield className="w-6 h-6" />
-                                                <span>Admin</span>
-                                              </Button>
-                                              <Button
-                                                variant="outline"
-                                                onClick={() => selectedUser && handlePromoteUser(selectedUser.id, 'moderator')}
-                                                className="flex flex-col items-center gap-2 h-20"
-                                              >
-                                                <UserCheck className="w-6 h-6" />
-                                                <span>Moderator</span>
-                                              </Button>
+                                          <div className="space-y-6">
+                                            <div>
+                                              <Label className="text-base font-medium mb-4 block">Select Role</Label>
+                                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                                <Button
+                                                  onClick={() => setSelectedRole('admin')}
+                                                  variant={selectedRole === 'admin' ? 'default' : 'outline'}
+                                                  className="flex flex-col items-center gap-2 h-20"
+                                                >
+                                                  <Shield className="w-6 h-6" />
+                                                  <span>Admin</span>
+                                                </Button>
+                                                <Button
+                                                  onClick={() => setSelectedRole('moderator')}
+                                                  variant={selectedRole === 'moderator' ? 'default' : 'outline'}
+                                                  className="flex flex-col items-center gap-2 h-20"
+                                                >
+                                                  <UserCheck className="w-6 h-6" />
+                                                  <span>Moderator</span>
+                                                </Button>
+                                                <Button
+                                                  onClick={() => setSelectedRole('custom')}
+                                                  variant={selectedRole === 'custom' ? 'default' : 'outline'}
+                                                  className="flex flex-col items-center gap-2 h-20"
+                                                >
+                                                  <Edit3 className="w-6 h-6" />
+                                                  <span>Custom</span>
+                                                </Button>
+                                              </div>
                                             </div>
+
+                                            <div>
+                                              <Label className="text-base font-medium mb-4 block">
+                                                Customize Permissions
+                                                {selectedRole === 'custom' && (
+                                                  <span className="text-sm text-amber-600 ml-2">(Select at least one permission)</span>
+                                                )}
+                                              </Label>
+                                              {selectedRole === 'custom' && customPermissions.length === 0 && (
+                                                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md">
+                                                  <p className="text-sm text-amber-800">
+                                                    <strong>Custom Role:</strong> Please select the specific permissions you want to grant to this user.
+                                                  </p>
+                                                </div>
+                                              )}
+                                              <div className="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto">
+                                                {allPermissions.map((permission) => (
+                                                  <div key={permission.value} className="flex items-start space-x-3">
+                                                    <Checkbox
+                                                      id={permission.value}
+                                                      checked={customPermissions.includes(permission.value)}
+                                                      onCheckedChange={(checked) => {
+                                                        if (checked) {
+                                                          setCustomPermissions([...customPermissions, permission.value]);
+                                                        } else {
+                                                          setCustomPermissions(customPermissions.filter(p => p !== permission.value));
+                                                        }
+                                                      }}
+                                                    />
+                                                    <div className="space-y-1">
+                                                      <Label htmlFor={permission.value} className="text-sm font-medium">
+                                                        {permission.label}
+                                                      </Label>
+                                                      <p className="text-xs text-gray-500">{permission.description}</p>
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          </div>
+                                          <div className="flex justify-end gap-3 pt-4 border-t">
+                                            <Button variant="outline" onClick={() => setPromoteDialogOpen(false)}>
+                                              Cancel
+                                            </Button>
+                                            <Button 
+                                              onClick={() => selectedUser && handlePromoteUser(selectedUser.id, selectedRole, customPermissions)}
+                                              disabled={selectedRole === 'custom' && customPermissions.length === 0}
+                                            >
+                                              Promote User
+                                            </Button>
                                           </div>
                                         </DialogContent>
                                       </Dialog>
@@ -482,31 +584,93 @@ export function AdminUsersManagement({ currentUser }: AdminUsersManagementProps)
                                         Promote to Admin
                                       </Button>
                                     </DialogTrigger>
-                                    <DialogContent className="mx-4 sm:mx-auto">
+                                    <DialogContent className="mx-4 sm:mx-auto max-w-2xl">
                                       <DialogHeader>
                                         <DialogTitle>Promote User</DialogTitle>
                                         <DialogDescription>
-                                          {selectedUser ? `Select the admin role for ${selectedUser.email}` : 'Select the admin role for the user'}
+                                          {selectedUser ? `Select the admin role and permissions for ${selectedUser.email}` : 'Select the admin role and permissions for the user'}
                                         </DialogDescription>
                                       </DialogHeader>
-                                      <div className="space-y-4">
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                          <Button
-                                            onClick={() => selectedUser && handlePromoteUser(selectedUser.id, 'admin')}
-                                            className="flex flex-col items-center gap-2 h-20"
-                                          >
-                                            <Shield className="w-6 h-6" />
-                                            <span>Admin</span>
-                                          </Button>
-                                          <Button
-                                            variant="outline"
-                                            onClick={() => selectedUser && handlePromoteUser(selectedUser.id, 'moderator')}
-                                            className="flex flex-col items-center gap-2 h-20"
-                                          >
-                                            <UserCheck className="w-6 h-6" />
-                                            <span>Moderator</span>
-                                          </Button>
+                                      <div className="space-y-6">
+                                        <div>
+                                          <Label className="text-base font-medium mb-4 block">Select Role</Label>
+                                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                            <Button
+                                              onClick={() => setSelectedRole('admin')}
+                                              variant={selectedRole === 'admin' ? 'default' : 'outline'}
+                                              className="flex flex-col items-center gap-2 h-20"
+                                            >
+                                              <Shield className="w-6 h-6" />
+                                              <span>Admin</span>
+                                            </Button>
+                                            <Button
+                                              onClick={() => setSelectedRole('moderator')}
+                                              variant={selectedRole === 'moderator' ? 'default' : 'outline'}
+                                              className="flex flex-col items-center gap-2 h-20"
+                                            >
+                                              <UserCheck className="w-6 h-6" />
+                                              <span>Moderator</span>
+                                            </Button>
+                                            <Button
+                                              onClick={() => setSelectedRole('custom')}
+                                              variant={selectedRole === 'custom' ? 'default' : 'outline'}
+                                              className="flex flex-col items-center gap-2 h-20"
+                                            >
+                                              <Edit3 className="w-6 h-6" />
+                                              <span>Custom</span>
+                                            </Button>
+                                          </div>
                                         </div>
+
+                                        <div>
+                                          <Label className="text-base font-medium mb-4 block">
+                                            Customize Permissions
+                                            {selectedRole === 'custom' && (
+                                              <span className="text-sm text-amber-600 ml-2">(Select at least one permission)</span>
+                                            )}
+                                          </Label>
+                                          {selectedRole === 'custom' && customPermissions.length === 0 && (
+                                            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md">
+                                              <p className="text-sm text-amber-800">
+                                                <strong>Custom Role:</strong> Please select the specific permissions you want to grant to this user.
+                                              </p>
+                                            </div>
+                                          )}
+                                          <div className="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto">
+                                            {allPermissions.map((permission) => (
+                                              <div key={permission.value} className="flex items-start space-x-3">
+                                                <Checkbox
+                                                  id={`mobile-${permission.value}`}
+                                                  checked={customPermissions.includes(permission.value)}
+                                                  onCheckedChange={(checked) => {
+                                                    if (checked) {
+                                                      setCustomPermissions([...customPermissions, permission.value]);
+                                                    } else {
+                                                      setCustomPermissions(customPermissions.filter(p => p !== permission.value));
+                                                    }
+                                                  }}
+                                                />
+                                                <div className="space-y-1">
+                                                  <Label htmlFor={`mobile-${permission.value}`} className="text-sm font-medium">
+                                                    {permission.label}
+                                                  </Label>
+                                                  <p className="text-xs text-gray-500">{permission.description}</p>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="flex justify-end gap-3 pt-4 border-t">
+                                        <Button variant="outline" onClick={() => setPromoteDialogOpen(false)}>
+                                          Cancel
+                                        </Button>
+                                        <Button 
+                                          onClick={() => selectedUser && handlePromoteUser(selectedUser.id, selectedRole, customPermissions)}
+                                          disabled={selectedRole === 'custom' && customPermissions.length === 0}
+                                        >
+                                          Promote User
+                                        </Button>
                                       </div>
                                     </DialogContent>
                                   </Dialog>
@@ -652,7 +816,7 @@ export function AdminUsersManagement({ currentUser }: AdminUsersManagementProps)
                             Permissions
                           </div>
                           <div className="flex flex-wrap gap-1">
-                            {user.adminPermissions?.map((permission) => (
+                            {getAdminPermissions(user.adminRole).map((permission) => (
                               <Badge key={permission} variant="secondary" className="text-xs">
                                 {permission}
                               </Badge>

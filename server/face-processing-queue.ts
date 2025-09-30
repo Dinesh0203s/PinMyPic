@@ -20,6 +20,11 @@ interface UserQueueStats {
   lastActivity: number;
 }
 
+// ES module equivalent of __dirname
+import { fileURLToPath } from 'url';
+import path from 'path';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 class FaceProcessingQueue {
   private queue: QueueItem[] = [];
   private processing = false;

@@ -35,11 +35,11 @@ export const getAdminRoleDisplayName = (adminRole?: string): string => {
 export const getAdminPermissions = (adminRole?: string): string[] => {
   switch (adminRole) {
     case 'owner':
-      return ['events', 'bookings', 'packages', 'photos', 'contacts', 'users', 'users_manage', 'qr_codes', 'storage', 'camera'];
+      return ['events', 'bookings', 'packages', 'photos', 'contacts', 'users', 'users_manage', 'qr_codes', 'storage'];
     case 'admin':
-      return ['events', 'bookings', 'packages', 'photos', 'contacts', 'users_view', 'qr_codes', 'storage', 'camera'];
+      return ['events', 'bookings', 'packages', 'photos', 'contacts', 'users_view', 'qr_codes', 'storage'];
     case 'moderator':
-      return ['events', 'bookings', 'photos', 'contacts', 'camera'];
+      return ['events', 'bookings', 'photos', 'contacts'];
     case 'qr_share':
       return ['events_view', 'qr_codes'];
     default:

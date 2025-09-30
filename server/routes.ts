@@ -2,7 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { spawn } from "child_process";
 import { storage } from "./storage";
-import { authenticateUser, requireAdmin, requireOwner, type AuthenticatedRequest } from "./middleware/auth";
+import { authenticateUser, requireAdmin, requireOwner, requirePermission, type AuthenticatedRequest } from "./middleware/auth";
+import { getOwnerPermissions } from "./utils/permissions";
 import { insertUserSchema, insertEventSchema, insertBookingSchema, insertContactMessageSchema, insertPackageSchema, User, Photo } from "@shared/types";
 import fs from "fs";
 import path from "path";
@@ -154,7 +155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (email === process.env.ADMIN_EMAIL) {
           updateData.isAdmin = true;
           updateData.adminRole = 'owner';
-          updateData.adminPermissions = ['events', 'bookings', 'packages', 'photos', 'contacts', 'users', 'users_manage'];
+          updateData.adminPermissions = getOwnerPermissions();
         }
         
         // Update user with profile info
@@ -182,7 +183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           photoURL,
           isAdmin: email === process.env.ADMIN_EMAIL,
           adminRole: email === process.env.ADMIN_EMAIL ? 'owner' : undefined,
-          adminPermissions: email === process.env.ADMIN_EMAIL ? ['events', 'bookings', 'packages', 'photos', 'contacts', 'users', 'users_manage'] : undefined
+          adminPermissions: email === process.env.ADMIN_EMAIL ? getOwnerPermissions() : undefined
         });
         res.json(user);
       } catch (createError: any) {
@@ -635,21 +636,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/events/:id/toggle-hidden", async (req: any, res) => {
-    // Development bypass for authentication issues
-    if (process.env.NODE_ENV === 'development') {
-      req.user = {
-        firebaseUid: 'dev-admin',
-        email: process.env.ADMIN_EMAIL,
-        userData: {
-          id: 'dev-admin',
-          firebaseUid: 'dev-admin',
-          email: process.env.ADMIN_EMAIL,
-          isAdmin: true
-        }
-      };
-    }
-    
+  app.patch("/api/events/:id/toggle-hidden", authenticateUser, requirePermission('events'), async (req: AuthenticatedRequest, res) => {
     try {
       const { isHidden } = req.body;
       
@@ -668,21 +655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/events/:id", async (req: any, res) => {
-    // Development bypass for authentication issues  
-    if (process.env.NODE_ENV === 'development') {
-      req.user = {
-        firebaseUid: 'dev-admin',
-        email: process.env.ADMIN_EMAIL,
-        userData: {
-          id: 'dev-admin',
-          firebaseUid: 'dev-admin',
-          email: process.env.ADMIN_EMAIL,
-          isAdmin: true
-        }
-      };
-    }
-    
+  app.delete("/api/events/:id", authenticateUser, requirePermission('events'), async (req: AuthenticatedRequest, res) => {
     try {
       const success = await storage.deleteEvent(req.params.id);
       if (!success) {
@@ -1199,20 +1172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Bookings routes
-  app.get("/api/bookings", async (req: any, res) => {
-    // Development bypass for authentication issues
-    if (process.env.NODE_ENV === 'development') {
-      req.user = {
-        firebaseUid: 'dev-user',
-        email: process.env.ADMIN_EMAIL,
-        userData: {
-          id: 'dev-user',
-          firebaseUid: 'dev-user',
-          email: process.env.ADMIN_EMAIL,
-          isAdmin: true
-        }
-      };
-    }
+  app.get("/api/bookings", authenticateUser, async (req: AuthenticatedRequest, res) => {
     try {
       const user = req.user;
       if (!user || !user.userData) {
@@ -1234,20 +1194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/bookings", async (req: any, res) => {
-    // Development bypass for authentication issues
-    if (process.env.NODE_ENV === 'development') {
-      req.user = {
-        firebaseUid: 'dev-user',
-        email: req.body.email || 'user@example.com',
-        userData: {
-          id: 'dev-user',
-          firebaseUid: 'dev-user',
-          email: req.body.email || 'user@example.com',
-          isAdmin: req.body.email === process.env.ADMIN_EMAIL
-        }
-      };
-    }
+  app.post("/api/bookings", authenticateUser, async (req: AuthenticatedRequest, res) => {
     try {
       console.log('Received booking data:', req.body);
       
@@ -1326,20 +1273,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PATCH endpoint for updating booking status and amount
-  app.patch("/api/bookings/:id", async (req: any, res) => {
-    // Development bypass for authentication issues
-    if (process.env.NODE_ENV === 'development') {
-      req.user = {
-        firebaseUid: 'dev-admin',
-        email: process.env.ADMIN_EMAIL,
-        userData: {
-          id: 'dev-admin',
-          firebaseUid: 'dev-admin',
-          email: process.env.ADMIN_EMAIL,
-          isAdmin: true
-        }
-      };
-    }
+  app.patch("/api/bookings/:id", authenticateUser, requirePermission('bookings'), async (req: AuthenticatedRequest, res) => {
     try {
       const { id } = req.params;
       const updateData = req.body;
@@ -1360,20 +1294,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/bookings/:id", async (req: any, res) => {
-    // Development bypass for authentication issues
-    if (process.env.NODE_ENV === 'development') {
-      req.user = {
-        firebaseUid: 'dev-admin',
-        email: process.env.ADMIN_EMAIL,
-        userData: {
-          id: 'dev-admin',
-          firebaseUid: 'dev-admin',
-          email: process.env.ADMIN_EMAIL,
-          isAdmin: true
-        }
-      };
-    }
+  app.put("/api/bookings/:id", authenticateUser, requirePermission('bookings'), async (req: AuthenticatedRequest, res) => {
     try {
       const bookingData = insertBookingSchema.partial().parse(req.body);
       const booking = await storage.updateBooking(req.params.id, bookingData);
@@ -1387,20 +1308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/bookings/:id", async (req: any, res) => {
-    // Development bypass for authentication issues
-    if (process.env.NODE_ENV === 'development') {
-      req.user = {
-        firebaseUid: 'dev-admin',
-        email: process.env.ADMIN_EMAIL,
-        userData: {
-          id: 'dev-admin',
-          firebaseUid: 'dev-admin',
-          email: process.env.ADMIN_EMAIL,
-          isAdmin: true
-        }
-      };
-    }
+  app.delete("/api/bookings/:id", authenticateUser, requirePermission('bookings'), async (req: AuthenticatedRequest, res) => {
     try {
       const { id } = req.params;
       console.log(`DELETE /api/bookings/${id}`);
@@ -1578,7 +1486,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin user management routes
-  app.get("/api/admin/users", authenticateUser, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.get("/api/admin/users", authenticateUser, requirePermission('users'), async (req: AuthenticatedRequest, res) => {
     try {
       const users = await storage.getUsers();
       res.json(users);
@@ -1588,7 +1496,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/users/admins", authenticateUser, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.get("/api/admin/users/admins", authenticateUser, requirePermission('users'), async (req: AuthenticatedRequest, res) => {
     try {
       const adminUsers = await storage.getAdminUsers();
       res.json(adminUsers);
@@ -1598,7 +1506,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/admin/users/:id/promote", authenticateUser, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.patch("/api/admin/users/:id/promote", authenticateUser, requirePermission('users_manage'), async (req: AuthenticatedRequest, res) => {
     try {
       const { id } = req.params;
       const { isAdmin, adminRole, adminPermissions } = req.body;
@@ -1655,7 +1563,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/admin/users/:id/permissions", authenticateUser, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.patch("/api/admin/users/:id/permissions", authenticateUser, requirePermission('users_manage'), async (req: AuthenticatedRequest, res) => {
     try {
       const { id } = req.params;
       const { adminPermissions } = req.body;

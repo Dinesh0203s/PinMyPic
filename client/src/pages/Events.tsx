@@ -345,7 +345,30 @@ const Events = () => {
       // Normal events page - fetch paginated events
       fetchEvents(currentPage, debouncedSearchTerm, sortBy, sortOrder);
     }
-  }, [urlEventId, location.search, fetchEvents, currentPage, debouncedSearchTerm, sortBy, sortOrder]);
+  }, [urlEventId, location.search, currentPage, debouncedSearchTerm, sortBy, sortOrder]);
+
+  // Handle navigation back to events list - refresh data when returning from event details
+  useEffect(() => {
+    // Only fetch events if we're not in a direct access mode and events array is empty
+    if (!urlEventId && !location.search.includes('eventId') && events.length === 0 && !loading) {
+      console.log('Refreshing events data after navigation');
+      fetchEvents(currentPage, debouncedSearchTerm, sortBy, sortOrder);
+    }
+  }, [urlEventId, location.search, events.length, loading, currentPage, debouncedSearchTerm, sortBy, sortOrder]);
+
+  // Handle page focus - refresh data when user returns to the page
+  useEffect(() => {
+    const handlePageFocus = () => {
+      // Only refresh if we're on the main events page and data is empty
+      if (!urlEventId && !location.search.includes('eventId') && events.length === 0 && !loading) {
+        console.log('Page focused - refreshing events data');
+        fetchEvents(currentPage, debouncedSearchTerm, sortBy, sortOrder);
+      }
+    };
+
+    window.addEventListener('focus', handlePageFocus);
+    return () => window.removeEventListener('focus', handlePageFocus);
+  }, [urlEventId, location.search, events.length, loading, currentPage, debouncedSearchTerm, sortBy, sortOrder]);
 
   // Fetch single event for direct access (URL or QR)
   const fetchSingleEventForDirectAccess = async (eventId: string, accessType: 'url' | 'qr') => {
@@ -868,6 +891,12 @@ const Events = () => {
                 <Button
                   onClick={() => {
                     setShowInlineGallery(false);
+                    setSelectedEvent(null);
+                    setPhotos([]);
+                    // Refresh events data when navigating back
+                    if (events.length === 0) {
+                      fetchEvents(currentPage, debouncedSearchTerm, sortBy, sortOrder);
+                    }
                   }}
                   variant="outline"
                   className="flex items-center gap-2 order-1 sm:order-none"

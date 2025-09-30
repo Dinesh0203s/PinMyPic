@@ -360,6 +360,20 @@ const AdminDashboard = () => {
     }
   }, [eventCurrentPage, eventSortBy, eventSortOrder, currentUser]);
 
+  // Handle page focus - refresh events data when user returns to the page
+  useEffect(() => {
+    const handlePageFocus = () => {
+      // Only refresh events if the events array is empty and we're not loading
+      if (events.length === 0 && !loading && currentUser) {
+        console.log('Admin Dashboard: Page focused - refreshing events data');
+        fetchEvents(eventCurrentPage, eventSearchTerm, eventSortBy, eventSortOrder);
+      }
+    };
+
+    window.addEventListener('focus', handlePageFocus);
+    return () => window.removeEventListener('focus', handlePageFocus);
+  }, [events.length, loading, currentUser, eventCurrentPage, eventSearchTerm, eventSortBy, eventSortOrder]);
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed': return 'bg-green-100 text-green-800';
@@ -685,12 +699,11 @@ const AdminDashboard = () => {
     try {
       console.log('Refreshing admin dashboard data...');
 
-      const [statsRes, storageRes, bookingsRes, messagesRes, eventsRes] = await Promise.all([
+      const [statsRes, storageRes, bookingsRes, messagesRes] = await Promise.all([
         fetch('/api/admin/stats').catch(() => ({ ok: false })),
         fetch('/api/admin/storage').catch(() => ({ ok: false })),
         fetch('/api/bookings').catch(() => ({ ok: false })),
-        fetch('/api/contact').catch(() => ({ ok: false })),
-        fetch('/api/admin/events').catch(() => ({ ok: false }))
+        fetch('/api/contact').catch(() => ({ ok: false }))
       ]);
 
       if (statsRes.ok && 'json' in statsRes) {
@@ -713,10 +726,8 @@ const AdminDashboard = () => {
         setMessages(messagesData || []);
       }
 
-      if (eventsRes.ok && 'json' in eventsRes) {
-        const eventsData = await eventsRes.json();
-        setEvents(eventsData || []);
-      }
+      // Refresh events data using the paginated fetchEvents function
+      await fetchEvents(eventCurrentPage, eventSearchTerm, eventSortBy, eventSortOrder);
 
       // Refresh packages data
       await fetchPackages();

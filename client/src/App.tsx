@@ -9,8 +9,6 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { Suspense, lazy, useEffect } from "react";
 import LoadingSpinner from "./components/LoadingSpinner";
 import ScrollToTop from "./components/ScrollToTop";
-import PerformanceMonitor from "./components/PerformanceMonitor";
-import { initializePerformanceOptimizations } from "./utils/performanceOptimizations";
 
 // Lazy load all pages for better performance
 const Index = lazy(() => import("./pages/Index"));
@@ -68,11 +66,6 @@ const queryClient = new QueryClient({
 // Use the imported ScrollToTop component
 
 const App = () => {
-  useEffect(() => {
-    // Initialize performance optimizations
-    initializePerformanceOptimizations();
-  }, []);
-
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
@@ -81,7 +74,6 @@ const App = () => {
             <Toaster />
             <Sonner />
             <AdminStatusNotification />
-            <PerformanceMonitor />
             <BrowserRouter>
               <ScrollToTop />
               <Suspense fallback={<LoadingSpinner />}>

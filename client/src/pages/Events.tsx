@@ -50,6 +50,7 @@ const Events = () => {
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
   const [faceScanDialogOpen, setFaceScanDialogOpen] = useState(false);
   const [directEventAccess, setDirectEventAccess] = useState<Event | null>(null);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   const [showInlineGallery, setShowInlineGallery] = useState(false);
   const [pin, setPin] = useState('');
@@ -420,8 +421,10 @@ const Events = () => {
           setTotalEvents(data.length);
         }
       }
+      setHasInitialized(true);
     } catch (error) {
       console.error('Error fetching events:', error);
+      setHasInitialized(true);
     } finally {
       setLoading(false);
     }
@@ -447,18 +450,18 @@ const Events = () => {
 
   // Handle navigation back to events list - refresh data when returning from event details
   useEffect(() => {
-    // Only fetch events if we're not in a direct access mode and events array is empty
-    if (!urlEventId && !location.search.includes('eventId') && events.length === 0 && !loading) {
+    // Only fetch events if we're not in a direct access mode and events array is empty and not yet initialized
+    if (!urlEventId && !location.search.includes('eventId') && events.length === 0 && !loading && !hasInitialized) {
       console.log('Refreshing events data after navigation');
       fetchEvents(currentPage, debouncedSearchTerm, sortBy, sortOrder);
     }
-  }, [urlEventId, location.search, events.length, loading, currentPage, debouncedSearchTerm, sortBy, sortOrder]);
+  }, [urlEventId, location.search, fetchEvents, currentPage, debouncedSearchTerm, sortBy, sortOrder, hasInitialized]);
 
   // Handle page focus - refresh data when user returns to the page
   useEffect(() => {
     const handlePageFocus = () => {
-      // Only refresh if we're on the main events page and data is empty
-      if (!urlEventId && !location.search.includes('eventId') && events.length === 0 && !loading) {
+      // Only refresh if we're on the main events page and data is empty and not yet initialized
+      if (!urlEventId && !location.search.includes('eventId') && events.length === 0 && !loading && !hasInitialized) {
         console.log('Page focused - refreshing events data');
         fetchEvents(currentPage, debouncedSearchTerm, sortBy, sortOrder);
       }
@@ -466,7 +469,7 @@ const Events = () => {
 
     window.addEventListener('focus', handlePageFocus);
     return () => window.removeEventListener('focus', handlePageFocus);
-  }, [urlEventId, location.search, events.length, loading, currentPage, debouncedSearchTerm, sortBy, sortOrder]);
+  }, [urlEventId, location.search, fetchEvents, currentPage, debouncedSearchTerm, sortBy, sortOrder, hasInitialized]);
 
   // Fetch single event for direct access (URL or QR)
   const fetchSingleEventForDirectAccess = async (eventId: string, accessType: 'url' | 'qr') => {

@@ -55,7 +55,7 @@ export const SimpleFullscreenViewer: React.FC<SimpleFullscreenViewerProps> = ({
 
   const handleDownload = async () => {
     const downloadUrl = photo.url.startsWith('/api/images/') 
-      ? `${photo.url}?download=true` 
+      ? `${photo.url}?download=true&quality=95` 
       : photo.url;
     const filename = photo.filename || `photo-${photo.id}.jpg`;
     

@@ -274,7 +274,7 @@ const Profile = () => {
         const batchPromises = batch.map(async (photo, index) => {
           try {
             const downloadUrl = photo.url.includes('/api/images/') 
-              ? `${photo.url}?download=true&quality=85` // Reduced quality for faster download
+              ? `${photo.url}?download=true` // Original quality for downloads
               : photo.url;
             
             const response = await fetch(downloadUrl);

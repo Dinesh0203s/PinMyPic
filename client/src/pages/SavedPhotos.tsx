@@ -120,7 +120,7 @@ const SavedPhotos = () => {
           const photo = batchPhotos[i];
           try {
             const downloadUrl = photo.url.includes('/api/images/') 
-              ? `${photo.url}?download=true&quality=85`
+              ? `${photo.url}?download=true`
               : photo.url;
             
             const response = await fetch(downloadUrl);

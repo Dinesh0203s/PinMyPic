@@ -113,6 +113,7 @@ app.get('/api/images/:fileId', async (req, res) => {
     const isDownload = download === 'true';
     const qualityNum = Math.min(Math.max(parseInt(quality as string), 20), 100);
     
+    
     const { mongoStorage } = await import('./mongo-storage');
     
     const imageData = await mongoStorage.getImageFromGridFS(fileId);

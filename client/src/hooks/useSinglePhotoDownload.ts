@@ -53,13 +53,11 @@ export const useSinglePhotoDownload = () => {
     }));
 
     // No toast notification - progress card handles all feedback
-    console.log(`Starting download: ${filename}`);
 
     try {
-      // Use original quality URL for downloads
-      const downloadUrl = photoUrl.includes('/api/images/') 
-        ? `${photoUrl}?download=true&quality=95`
-        : photoUrl;
+      // Use the URL as-is since it already has the correct parameters from the component
+      const downloadUrl = photoUrl;
+      
 
       // First, try to get file size with HEAD request for better progress accuracy
       let totalSize = 0;

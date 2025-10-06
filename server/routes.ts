@@ -668,6 +668,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin route to check GridFS status
+  app.get("/api/admin/gridfs-status", authenticateUser, requirePermission('admin'), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { mongoStorage } = await import('./mongo-db-storage');
+      const status = await mongoStorage.getGridFSStatus();
+      res.json({
+        message: "GridFS status retrieved",
+        status
+      });
+    } catch (error) {
+      console.error("Error getting GridFS status:", error);
+      res.status(500).json({ error: "Failed to get GridFS status" });
+    }
+  });
+
+  // Admin route to check chunks for a specific file
+  app.get("/api/admin/file-chunks/:fileId", authenticateUser, requirePermission('admin'), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { mongoStorage } = await import('./mongo-db-storage');
+      const result = await mongoStorage.getFileChunks(req.params.fileId);
+      res.json({
+        message: "File chunks retrieved",
+        result
+      });
+    } catch (error) {
+      console.error("Error getting file chunks:", error);
+      res.status(500).json({ error: "Failed to get file chunks" });
+    }
+  });
+
+  // Admin route to cleanup orphaned GridFS chunks
+  app.post("/api/admin/cleanup-chunks", authenticateUser, requirePermission('admin'), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { mongoStorage } = await import('./mongo-db-storage');
+      const result = await mongoStorage.cleanupOrphanedChunks();
+      res.json({
+        message: "Orphaned chunks cleanup completed",
+        result
+      });
+    } catch (error) {
+      console.error("Error cleaning up orphaned chunks:", error);
+      res.status(500).json({ error: "Failed to cleanup orphaned chunks" });
+    }
+  });
+
   // Get photos for a specific event with pagination
   app.get("/api/events/:id/photos", async (req, res) => {
     try {

@@ -436,7 +436,6 @@ export class MongoDBStorage implements IStorage {
       
       // Remove all event photos from users' saved photos lists
       if (photoIds.length > 0) {
-        console.log(`Removing ${photoIds.length} photos from users' saved photos for event ${id}`);
         const usersCollection = await this.getCollection('users');
         
         // Update all users who have any of these photos saved
@@ -802,6 +801,27 @@ export class MongoDBStorage implements IStorage {
       const photo = await this.getPhoto(id);
       if (!photo) return false;
 
+      // Delete image files from GridFS before deleting database record
+      if (photo.url && photo.url.startsWith('/api/images/')) {
+        const fileId = photo.url.replace('/api/images/', '');
+        try {
+          // Delete main file
+          await this.deleteImageFromGridFS(fileId);
+          
+          // Also delete thumbnail if it exists and is different from main file
+          if (photo.thumbnailId && photo.thumbnailId !== fileId) {
+            await this.deleteImageFromGridFS(photo.thumbnailId);
+          }
+        } catch (fileError) {
+          console.error('Error deleting GridFS file:', fileError);
+          // Continue with database deletion even if file deletion fails
+        }
+      }
+
+      // Remove photo from all users' saved photos lists
+      await this.removePhotoFromAllUsers(id);
+
+      // Delete photo record from database
       const collection = await this.getCollection('photos');
       const result = await collection.deleteOne({ _id: new ObjectId(id) });
       
@@ -967,6 +987,219 @@ export class MongoDBStorage implements IStorage {
   }
 
   // GridFS image methods
+  async deleteImageFromGridFS(fileId: string): Promise<boolean> {
+    try {
+      await this.ensureConnection();
+      const db = mongoService.getDb();
+      const bucket = new GridFSBucket(db, { bucketName: 'photos' });
+
+      const objectId = new ObjectId(fileId);
+      
+      // Check if file exists before deleting
+      const files = await bucket.find({ _id: objectId }).toArray();
+      
+      if (files.length === 0) {
+        return false;
+      }
+
+      // Delete the file and all its chunks
+      await bucket.delete(objectId);
+      
+      // Wait a moment for the deletion to propagate
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Verify deletion by checking if file still exists
+      const remainingFiles = await bucket.find({ _id: objectId }).toArray();
+      
+      if (remainingFiles.length === 0) {
+        return true;
+      } else {
+        // Try manual chunk cleanup as fallback
+        return await this.manualChunkCleanup(fileId, objectId, db);
+      }
+    } catch (error) {
+      console.error(`Error deleting image from GridFS: ${fileId}`, error);
+      return false;
+    }
+  }
+
+  // Manual chunk cleanup as fallback
+  private async manualChunkCleanup(fileId: string, objectId: ObjectId, db: any): Promise<boolean> {
+    try {
+      // Delete from files collection
+      const filesCollection = db.collection('photos.files');
+      const filesResult = await filesCollection.deleteOne({ _id: objectId });
+      
+      // Delete from chunks collection
+      const chunksCollection = db.collection('photos.chunks');
+      const chunksResult = await chunksCollection.deleteMany({ files_id: objectId });
+      
+      // Verify cleanup
+      const remainingFiles = await filesCollection.find({ _id: objectId }).toArray();
+      const remainingChunks = await chunksCollection.find({ files_id: objectId }).toArray();
+      
+      if (remainingFiles.length === 0 && remainingChunks.length === 0) {
+        return true;
+      } else {
+        return false;
+      }
+    } catch (error) {
+      console.error(`Manual chunk cleanup failed for ${fileId}:`, error);
+      return false;
+    }
+  }
+
+  // Remove photo from all users' saved photos lists
+  async removePhotoFromAllUsers(photoId: string): Promise<void> {
+    try {
+      const usersCollection = await this.getCollection('users');
+      
+      await usersCollection.updateMany(
+        { savedPhotos: photoId },
+        { 
+          $pull: { savedPhotos: photoId } as any,
+          $set: { updatedAt: new Date().toISOString() }
+        }
+      );
+    } catch (error) {
+      console.error(`Error removing photo from users:`, error);
+      throw error;
+    }
+  }
+
+  // Method to check chunks for a specific file
+  async getFileChunks(fileId: string): Promise<{ file: any; chunks: any[]; chunkCount: number }> {
+    try {
+      await this.ensureConnection();
+      const db = mongoService.getDb();
+      
+      const filesCollection = db.collection('photos.files');
+      const chunksCollection = db.collection('photos.chunks');
+      
+      const objectId = new ObjectId(fileId);
+      
+      // Get file info
+      const file = await filesCollection.findOne({ _id: objectId });
+      if (!file) {
+        return { file: null, chunks: [], chunkCount: 0 };
+      }
+      
+      // Get chunks for this file
+      const chunks = await chunksCollection.find({ files_id: objectId }).toArray();
+      
+      return {
+        file: {
+          _id: file._id,
+          filename: file.filename,
+          length: file.length,
+          chunkSize: file.chunkSize,
+          uploadDate: file.uploadDate,
+          contentType: file.contentType
+        },
+        chunks: chunks.map(chunk => ({
+          _id: chunk._id,
+          files_id: chunk.files_id,
+          n: chunk.n,
+          data: chunk.data ? `Buffer(${chunk.data.length})` : 'empty'
+        })),
+        chunkCount: chunks.length
+      };
+    } catch (error) {
+      console.error(`Error checking file chunks:`, error);
+      return { file: null, chunks: [], chunkCount: 0 };
+    }
+  }
+
+  // Method to check GridFS collections status
+  async getGridFSStatus(): Promise<{ files: any[]; chunks: any[]; totalFiles: number; totalChunks: number; totalSize: number }> {
+    try {
+      await this.ensureConnection();
+      const db = mongoService.getDb();
+      
+      const filesCollection = db.collection('photos.files');
+      const chunksCollection = db.collection('photos.chunks');
+      
+      // Get all files
+      const files = await filesCollection.find({}).toArray();
+      
+      // Get all chunks
+      const chunks = await chunksCollection.find({}).toArray();
+      
+      // Calculate total size
+      const totalSize = files.reduce((sum, file) => sum + (file.length || 0), 0);
+      
+      return {
+        files: files.map(file => ({
+          _id: file._id,
+          filename: file.filename,
+          length: file.length,
+          chunkSize: file.chunkSize,
+          uploadDate: file.uploadDate,
+          contentType: file.contentType
+        })),
+        chunks: chunks.map(chunk => ({
+          _id: chunk._id,
+          files_id: chunk.files_id,
+          n: chunk.n,
+          data: chunk.data ? `Buffer(${chunk.data.length})` : 'empty'
+        })),
+        totalFiles: files.length,
+        totalChunks: chunks.length,
+        totalSize: totalSize
+      };
+    } catch (error) {
+      console.error(`Error checking GridFS status:`, error);
+      return { files: [], chunks: [], totalFiles: 0, totalChunks: 0, totalSize: 0 };
+    }
+  }
+
+  // Utility method to check for orphaned chunks and clean them up
+  async cleanupOrphanedChunks(): Promise<{ orphanedFiles: number; orphanedChunks: number; cleanedFiles: number; cleanedChunks: number }> {
+    try {
+      await this.ensureConnection();
+      const db = mongoService.getDb();
+      
+      const filesCollection = db.collection('photos.files');
+      const chunksCollection = db.collection('photos.chunks');
+      
+      // Find all files in GridFS
+      const allFiles = await filesCollection.find({}).toArray();
+      
+      // Find all chunks
+      const allChunks = await chunksCollection.find({}).toArray();
+      
+      let orphanedFiles = 0;
+      let orphanedChunks = 0;
+      let cleanedFiles = 0;
+      let cleanedChunks = 0;
+      
+      // Check for files without corresponding chunks
+      for (const file of allFiles) {
+        const fileChunks = await chunksCollection.find({ files_id: file._id }).toArray();
+        if (fileChunks.length === 0) {
+          await filesCollection.deleteOne({ _id: file._id });
+          orphanedFiles++;
+          cleanedFiles++;
+        }
+      }
+      
+      // Check for chunks without corresponding files
+      for (const chunk of allChunks) {
+        const file = await filesCollection.findOne({ _id: chunk.files_id });
+        if (!file) {
+          await chunksCollection.deleteOne({ _id: chunk._id });
+          orphanedChunks++;
+          cleanedChunks++;
+        }
+      }
+      
+      return { orphanedFiles, orphanedChunks, cleanedFiles, cleanedChunks };
+    } catch (error) {
+      console.error(`Error during orphaned chunks cleanup:`, error);
+      return { orphanedFiles: 0, orphanedChunks: 0, cleanedFiles: 0, cleanedChunks: 0 };
+    }
+  }
+
   async getImageFromGridFS(fileId: string): Promise<{ buffer: Buffer; contentType: string } | null> {
     try {
       await this.ensureConnection();

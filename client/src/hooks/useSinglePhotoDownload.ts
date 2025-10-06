@@ -81,7 +81,6 @@ export const useSinglePhotoDownload = () => {
         totalSize = contentLength ? parseInt(contentLength, 10) : 0;
       }
       
-      console.log(`Download info: ${filename}, Size: ${totalSize > 0 ? (totalSize / 1024 / 1024).toFixed(1) + 'MB' : 'Unknown size'}`);
 
       if (!response.body) {
         throw new Error('Response body is null');
@@ -191,7 +190,6 @@ export const useSinglePhotoDownload = () => {
       });
 
       // No toast - progress card shows completion status
-      console.log(`Download completed: ${filename}`);
 
       // Remove from active downloads after delay
       setTimeout(() => {

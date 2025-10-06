@@ -61,7 +61,7 @@ const Contact = () => {
     {
       icon: <Phone className="h-6 w-6" />,
       title: "Phone",
-      info: "+1 (555) 123-4567",
+      info: "+91 9025943634",
       description: "Mon-Fri 9AM-7PM, Sat-Sun 10AM-5PM"
     },
     {
@@ -73,8 +73,8 @@ const Contact = () => {
     {
       icon: <MapPin className="h-6 w-6" />,
       title: "Studio Location",
-      info: "123 Photography Street",
-      description: "Downtown Creative District"
+      info: "Coimbatore",
+      description: "Tamil Nadu, India"
     },
     {
       icon: <Clock className="h-6 w-6" />,

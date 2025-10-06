@@ -239,9 +239,9 @@ const Contact = () => {
                   <div className="p-4 md:p-6">
                     <h3 className="text-base md:text-lg font-semibold text-gray-800 mb-2">Visit Our Studio</h3>
                     <p className="text-gray-600">
-                      123 Photography Street<br />
-                      Downtown Creative District<br />
-                      City, State 12345
+                      RS Puram<br />
+                      Coimbatore, Tamil Nadu<br />
+                      India - 641002
                     </p>
                   </div>
                 </CardContent>

@@ -4,10 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Upload, Camera, X, FileImage, AlertCircle, CheckCircle, Smartphone, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { UploadOptimizer, MemoryMonitor } from '@/utils/uploadOptimizer';
 import { uploadQueueManager, DynamicUploadStats } from '@/utils/dynamicUploadProcessor';
+import { imageCompressor } from '@/utils/imageCompression';
 
 interface PhotoUploadDialogProps {
   eventId: string;
@@ -15,6 +18,7 @@ interface PhotoUploadDialogProps {
   onPhotosUploaded: () => void;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  eventCompressionSetting?: boolean;
 }
 
 interface UploadFile {
@@ -32,7 +36,8 @@ export function PhotoUploadDialog({
   eventTitle, 
   onPhotosUploaded,
   open: controlledOpen,
-  onOpenChange: controlledOnOpenChange 
+  onOpenChange: controlledOnOpenChange,
+  eventCompressionSetting = false
 }: PhotoUploadDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
@@ -43,6 +48,7 @@ export function PhotoUploadDialog({
   const [dynamicStats, setDynamicStats] = useState<DynamicUploadStats | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
 
   // Use controlled props if provided, otherwise use internal state
   const isOpen = controlledOpen !== undefined ? controlledOpen : internalOpen;
@@ -238,7 +244,7 @@ export function PhotoUploadDialog({
 
 
 
-  const processFiles = (files: File[]) => {
+  const processFiles = async (files: File[]) => {
     const imageFiles = files.filter(file => file.type.startsWith('image/'));
     
     if (imageFiles.length !== files.length) {
@@ -293,7 +299,47 @@ export function PhotoUploadDialog({
       });
     }
 
-    const newUploadFiles: UploadFile[] = imageFiles.map(file => ({
+    let processedFiles: File[] = imageFiles;
+
+    // Apply compression if enabled
+    if (eventCompressionSetting) {
+      try {
+        
+        toast({
+          title: "Compressing images",
+          description: `Compressing ${imageFiles.length} images for faster upload...`,
+        });
+
+        const compressionResults = await imageCompressor.compressImages(imageFiles, {
+          quality: 0.8,
+          maxWidth: 1920,
+          maxHeight: 1080,
+          format: imageCompressor.isWebPSupported() ? 'webp' : 'jpeg'
+        });
+
+        processedFiles = compressionResults.map(result => result.compressedFile);
+        
+        const totalOriginalSize = compressionResults.reduce((sum, result) => sum + result.originalSize, 0);
+        const totalCompressedSize = compressionResults.reduce((sum, result) => sum + result.compressedSize, 0);
+        const avgCompressionRatio = Math.round((1 - totalCompressedSize / totalOriginalSize) * 100);
+
+
+        toast({
+          title: "Compression complete",
+          description: `Images compressed by ${avgCompressionRatio}% (${Math.round(totalOriginalSize / 1024 / 1024)}MB → ${Math.round(totalCompressedSize / 1024 / 1024)}MB)`,
+        });
+      } catch (error) {
+        console.error('Compression failed:', error);
+        toast({
+          title: "Compression failed",
+          description: "Using original images instead.",
+          variant: "destructive"
+        });
+        processedFiles = imageFiles;
+      }
+    }
+
+    const newUploadFiles: UploadFile[] = processedFiles.map(file => ({
       file,
       id: `${Date.now()}-${Math.random()}`,
       progress: 0,
@@ -305,7 +351,14 @@ export function PhotoUploadDialog({
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    processFiles(files);
+    processFiles(files).catch(error => {
+      console.error('Error processing files:', error);
+      toast({
+        title: "Error processing files",
+        description: "Failed to process selected files.",
+        variant: "destructive"
+      });
+    });
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -323,7 +376,14 @@ export function PhotoUploadDialog({
     setIsDragOver(false);
     
     const files = Array.from(e.dataTransfer.files);
-    processFiles(files);
+    processFiles(files).catch(error => {
+      console.error('Error processing files:', error);
+      toast({
+        title: "Error processing files",
+        description: "Failed to process dropped files.",
+        variant: "destructive"
+      });
+    });
   };
 
   const removeFile = (id: string) => {
@@ -561,6 +621,20 @@ export function PhotoUploadDialog({
             <Camera className="h-5 w-5" />
             Upload Photos to {eventTitle}
           </DialogTitle>
+          <div className="flex items-center gap-2 text-sm">
+            <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+              eventCompressionSetting 
+                ? 'bg-green-100 text-green-800' 
+                : 'bg-gray-100 text-gray-600'
+            }`}>
+              {eventCompressionSetting ? '🔄 Compression Enabled' : '📤 Original Quality'}
+            </div>
+            {eventCompressionSetting && (
+              <span className="text-xs text-gray-500">
+                Images will be compressed for faster upload
+              </span>
+            )}
+          </div>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -617,18 +691,30 @@ export function PhotoUploadDialog({
             aria-label="Select photos to upload"
           />
 
+
           {/* Upload Progress */}
           {uploadFiles.length > 0 && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium">
-                  Photos ({uploadStats.completed}/{uploadStats.total})
-                </h3>
-                {uploadStats.total > 20 && (
-                  <Badge variant="outline" className="text-xs">
-                    Showing key files only
-                  </Badge>
-                )}
+                <div className="flex items-center gap-3">
+                  <h3 className="text-lg font-medium">
+                    Photos ({uploadStats.completed}/{uploadStats.total})
+                  </h3>
+                  <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    eventCompressionSetting 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {eventCompressionSetting ? '🔄 Compressed' : '📤 Original'}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {uploadStats.total > 20 && (
+                    <Badge variant="outline" className="text-xs">
+                      Showing key files only
+                    </Badge>
+                  )}
+                </div>
                 <div className="flex gap-2">
                   <Button
                     onClick={handleUploadAll}

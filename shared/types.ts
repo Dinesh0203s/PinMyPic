@@ -34,6 +34,7 @@ export interface Event {
   publicPin?: string;
   brideGroomPin?: string;
   passcode?: string;
+  enableImageCompression?: boolean;
   createdBy?: string;
   createdAt: string;
   updatedAt: string;
@@ -147,6 +148,7 @@ export const insertEventSchema = z.object({
   publicPin: z.string().optional(),
   brideGroomPin: z.string().optional(),
   passcode: z.string().optional(),
+  enableImageCompression: z.boolean().default(false),
   createdBy: z.string().optional(),
 });
 

@@ -27,7 +27,8 @@ export function CreateEventDialog({ onEventCreated }: CreateEventDialogProps) {
     isPrivate: false,
     publicPin: '',
     brideGroomPin: '',
-    thumbnailUrl: ''
+    thumbnailUrl: '',
+    enableImageCompression: false
   });
   const [loading, setLoading] = useState(false);
   const { currentUser } = useAuth();
@@ -82,7 +83,8 @@ export function CreateEventDialog({ onEventCreated }: CreateEventDialogProps) {
           isPrivate: false,
           publicPin: '',
           brideGroomPin: '',
-          thumbnailUrl: ''
+          thumbnailUrl: '',
+          enableImageCompression: false
         });
         onEventCreated();
       } else {
@@ -258,6 +260,30 @@ export function CreateEventDialog({ onEventCreated }: CreateEventDialogProps) {
             />
             <Label htmlFor="isPrivate">Private Event</Label>
             <p className="text-sm text-gray-600">Only accessible with PIN codes</p>
+          </div>
+
+          {/* Image Compression Toggle */}
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="enableImageCompression"
+                    checked={formData.enableImageCompression}
+                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, enableImageCompression: checked }))}
+                  />
+                  <Label htmlFor="enableImageCompression" className="text-sm font-medium text-blue-800">
+                    Enable Image Compression
+                  </Label>
+                </div>
+              </div>
+              <div className="text-xs text-blue-600 sm:text-right">
+                {formData.enableImageCompression 
+                  ? "Images will be compressed before upload (faster upload, smaller files)" 
+                  : "Original images will be uploaded (slower upload, larger files)"
+                }
+              </div>
+            </div>
           </div>
 
           <DialogFooter>

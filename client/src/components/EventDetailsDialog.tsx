@@ -120,7 +120,8 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
     isPrivate: false,
     publicPin: '',
     brideGroomPin: '',
-    passcode: ''
+    passcode: '',
+    enableImageCompression: false
   });
 
   const categories = [
@@ -144,7 +145,8 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
         isPrivate: event.isPrivate,
         publicPin: event.publicPin || '',
         brideGroomPin: event.brideGroomPin || '',
-        passcode: event.passcode || ''
+        passcode: event.passcode || '',
+        enableImageCompression: event.enableImageCompression || false
       });
       
       if (activeTab === 'gallery') {
@@ -304,7 +306,8 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
             isPrivate: updatedEvent.isPrivate,
             publicPin: updatedEvent.publicPin || '',
             brideGroomPin: updatedEvent.brideGroomPin || '',
-            passcode: updatedEvent.passcode || ''
+            passcode: updatedEvent.passcode || '',
+            enableImageCompression: updatedEvent.enableImageCompression || false
           });
         }
       } else {
@@ -385,7 +388,8 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
         isPrivate: event.isPrivate,
         publicPin: event.publicPin || '',
         brideGroomPin: event.brideGroomPin || '',
-        passcode: event.passcode || ''
+        passcode: event.passcode || '',
+        enableImageCompression: event.enableImageCompression || false
       });
     }
     setIsEditing(false);
@@ -651,7 +655,30 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
                     )}
                   </div>
 
-
+                  {/* Image Compression Toggle */}
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id="enableImageCompression"
+                            checked={editData.enableImageCompression}
+                            onCheckedChange={(checked) => setEditData(prev => ({ ...prev, enableImageCompression: checked }))}
+                            disabled={!isEditing}
+                          />
+                          <Label htmlFor="enableImageCompression" className="text-sm font-medium text-blue-800">
+                            Enable Image Compression
+                          </Label>
+                        </div>
+                      </div>
+                      <div className="text-xs text-blue-600 sm:text-right">
+                        {editData.enableImageCompression 
+                          ? "Images will be compressed before upload (faster upload, smaller files)" 
+                          : "Original images will be uploaded (slower upload, larger files)"
+                        }
+                      </div>
+                    </div>
+                  </div>
 
                   <div className="pt-4 border-t">
                     <div className="flex items-center justify-between text-sm">

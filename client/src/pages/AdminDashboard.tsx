@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { ChevronUp, ChevronDown, Filter } from 'lucide-react';
 import Header from '@/components/Header';
 import { CreateEventDialog } from '@/components/CreateEventDialog';
@@ -147,6 +148,7 @@ const AdminDashboard = () => {
   
   // QR Management states
   const [selectedEventForQR, setSelectedEventForQR] = useState<Event | null>(null);
+  
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [isGeneratingQR, setIsGeneratingQR] = useState(false);
   const [copiedQRUrl, setCopiedQRUrl] = useState(false);
@@ -1091,6 +1093,7 @@ const AdminDashboard = () => {
 
 
 
+
           {hasPermission(userData, 'events') && (
             <TabsContent value="events" className="space-y-6">
             <Card>
@@ -1172,6 +1175,7 @@ const AdminDashboard = () => {
                   </Select>
                 </div>
 
+
                 {/* Results Summary */}
                 {eventPagination && (
                   <div className="flex justify-between items-center mb-4">
@@ -1244,6 +1248,7 @@ const AdminDashboard = () => {
                                   eventId={event.id} 
                                   eventTitle={event.title}
                                   onPhotosUploaded={refreshData}
+                                  eventCompressionSetting={event.enableImageCompression}
                                 />
                                 <Button variant="ghost" size="sm" onClick={() => handleEditEvent(event)} title="Edit Event">
                                   <Edit className="h-4 w-4" />
@@ -1364,6 +1369,7 @@ const AdminDashboard = () => {
                                 eventId={event.id} 
                                 eventTitle={event.title}
                                 onPhotosUploaded={refreshData}
+                                eventCompressionSetting={event.enableImageCompression}
                               />
                               <Button variant="ghost" size="sm" onClick={() => handleEditEvent(event)} title="Edit Event" className="p-2">
                                 <Edit className="h-4 w-4" />

@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAuth } from '@/contexts/AuthContext';
 import type { Booking, Event, Package as PackageType } from '@shared/types';
 import { 
   BarChart, 
@@ -72,6 +73,7 @@ export function AnalyticsReport({ open, onOpenChange }: AnalyticsReportProps) {
   const [loading, setLoading] = useState(true);
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const { currentUser } = useAuth();
 
   useEffect(() => {
     if (open) {
@@ -79,21 +81,81 @@ export function AnalyticsReport({ open, onOpenChange }: AnalyticsReportProps) {
     }
   }, [open]);
 
+  // Helper function to get authentication headers
+  const getAuthHeaders = async (): Promise<Record<string, string>> => {
+    if (!currentUser) return {};
+    try {
+      const token = await currentUser.getIdToken();
+      return {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+    } catch (error) {
+      console.error('Error getting auth token:', error);
+      return {};
+    }
+  };
+
   const fetchAnalyticsData = async () => {
     setLoading(true);
     try {
-      // Fetch all required data
+      // Check if user is authenticated
+      if (!currentUser) {
+        throw new Error('User not authenticated');
+      }
+
+      // Get authentication headers
+      const headers = await getAuthHeaders();
+      
+      // Fetch all required data with authentication
       const [bookingsRes, eventsRes, photosRes, packagesRes] = await Promise.all([
-        fetch('/api/bookings'),
-        fetch('/api/events/all'),
+        fetch('/api/bookings', { headers }),
+        fetch('/api/events/all', { headers }),
         fetch('/api/events'), // Public events
-        fetch('/api/packages')
+        fetch('/api/packages', { headers })
       ]);
 
+      // Check if requests were successful
+      if (!bookingsRes.ok) {
+        throw new Error(`Bookings API failed: ${bookingsRes.status}`);
+      }
+      if (!eventsRes.ok) {
+        throw new Error(`Events API failed: ${eventsRes.status}`);
+      }
+      if (!packagesRes.ok) {
+        throw new Error(`Packages API failed: ${packagesRes.status}`);
+      }
+
       const bookings = await bookingsRes.json();
-      const allEvents = await eventsRes.json();
+      const eventsResponse = await eventsRes.json();
       const photos = [];
       const packages = await packagesRes.json();
+
+      // Debug logging
+      console.log('Analytics API responses:', {
+        bookings: Array.isArray(bookings) ? `Array(${bookings.length})` : typeof bookings,
+        eventsResponse: Array.isArray(eventsResponse) ? `Array(${eventsResponse.length})` : typeof eventsResponse,
+        packages: Array.isArray(packages) ? `Array(${packages.length})` : typeof packages
+      });
+
+      // Handle paginated events response
+      const allEvents = eventsResponse.events || eventsResponse;
+      
+      // Ensure all data is in the expected format
+      if (!Array.isArray(bookings)) {
+        console.error('Bookings data is not an array:', bookings);
+        throw new Error('Invalid bookings data received');
+      }
+      
+      if (!Array.isArray(allEvents)) {
+        console.error('Events data is not an array:', allEvents);
+        throw new Error('Invalid events data received');
+      }
+      
+      if (!Array.isArray(packages)) {
+        console.error('Packages data is not an array:', packages);
+        throw new Error('Invalid packages data received');
+      }
 
       // Calculate booking statistics
       const bookingStats = {

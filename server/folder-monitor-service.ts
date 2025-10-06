@@ -13,7 +13,7 @@ interface FolderMonitorConfig {
 }
 
 class FolderMonitorService {
-  private watchers: Map<string, chokidar.FSWatcher> = new Map();
+  private watchers: Map<string, any> = new Map();
   private configs: Map<string, FolderMonitorConfig> = new Map();
 
   /**

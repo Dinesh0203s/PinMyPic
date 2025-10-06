@@ -158,7 +158,7 @@ export function createPerformanceLogger() {
     const start = Date.now();
     const originalEnd = res.end;
     
-    res.end = function(...args: any[]) {
+    res.end = function(chunk?: any, encoding?: any, cb?: any) {
       const duration = Date.now() - start;
       const size = res.get('content-length') || '0';
       
@@ -172,7 +172,7 @@ export function createPerformanceLogger() {
         console.warn(`Large response: ${req.method} ${req.path} ${size}bytes`);
       }
       
-      originalEnd.apply(this, args);
+      return originalEnd.call(this, chunk, encoding, cb);
     };
     
     next();

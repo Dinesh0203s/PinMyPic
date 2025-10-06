@@ -219,7 +219,7 @@ export default function FolderMonitor() {
         eventId: selectedEventId,
       });
 
-      const event = events.find(e => e.id === selectedEventId);
+      const event = events.find((e: any) => e.id === selectedEventId);
       const folderName = validation.folderPath.split('/').pop() || 'Unknown Folder';
 
       const newFolder: MonitoredFolder = {
@@ -270,7 +270,7 @@ export default function FolderMonitor() {
         eventId: selectedEventId,
       });
 
-      const event = events.find(e => e.id === selectedEventId);
+      const event = events.find((e: any) => e.id === selectedEventId);
       const folderName = validation.folderPath.split('/').pop() || 'Unknown Folder';
 
       const newFolder: MonitoredFolder = {
@@ -311,7 +311,7 @@ export default function FolderMonitor() {
         mode: 'read'
       });
 
-      const event = events.find(e => e.id === selectedEventId);
+      const event = events.find((e: any) => e.id === selectedEventId);
       if (!event) {
         toast.error('Selected event not found');
         return;

@@ -211,7 +211,7 @@ class AsyncUploadHandler {
   cleanupOldJobs(): void {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     
-    for (const [jobId, job] of this.uploadJobs.entries()) {
+    for (const [jobId, job] of Array.from(this.uploadJobs.entries())) {
       if (job.status === 'completed' && job.endTime && job.endTime < oneHourAgo) {
         this.uploadJobs.delete(jobId);
       }

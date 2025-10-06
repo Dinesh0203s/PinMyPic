@@ -361,6 +361,7 @@ const OptimizedPhotoGallery = ({
               isSelected={selectedPhotos.has(photo.id)}
               onToggleSelection={() => togglePhotoSelection(photo.id)}
               onEnterMultiSelectMode={enterMultiSelectMode}
+              downloadPhoto={downloadPhoto}
             />
           ))}
         </div>
@@ -401,6 +402,7 @@ interface PhotoCardProps {
   isSelected?: boolean;
   onToggleSelection?: () => void;
   onEnterMultiSelectMode?: () => void;
+  downloadPhoto?: (photoId: string, photoUrl: string, filename: string) => Promise<boolean>;
 }
 
 const PhotoCard = ({ 
@@ -418,7 +420,8 @@ const PhotoCard = ({
   multiSelectMode = false,
   isSelected = false,
   onToggleSelection,
-  onEnterMultiSelectMode
+  onEnterMultiSelectMode,
+  downloadPhoto
 }: PhotoCardProps) => {
   const cardRef = useRef<HTMLDivElement>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -499,7 +502,9 @@ const PhotoCard = ({
     const filename = photo.filename || `photo-${photo.id}.jpg`;
     
     // Use the new download system with progress
-    await downloadPhoto(photo.id, originalUrl, filename);
+    if (downloadPhoto) {
+      await downloadPhoto(photo.id, originalUrl, filename);
+    }
   };
 
   const handleSaveToProfile = (e: React.MouseEvent) => {

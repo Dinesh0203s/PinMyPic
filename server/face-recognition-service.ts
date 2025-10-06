@@ -304,7 +304,7 @@ export async function compareFaces(selfieData: string, photos: Array<Photo & { f
       // Try to get the detailed error message from the Python service
       let errorMessage = `Face comparison failed: ${response.statusText}`;
       try {
-        const errorData = await response.json();
+        const errorData = await response.json() as any;
         if (errorData.error) {
           errorMessage = errorData.error;
         }

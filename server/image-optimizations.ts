@@ -257,10 +257,10 @@ export class ImageCache {
     // Evict old items if cache is full
     while (this.currentCacheSize + size > this.maxCacheSize && this.cache.size > 0) {
       const oldestKey = this.cache.keys().next().value;
-      const oldItem = this.cache.get(oldestKey);
+      const oldItem = this.cache.get(oldestKey!);
       if (oldItem) {
         this.currentCacheSize -= oldItem.size;
-        this.cache.delete(oldestKey);
+        this.cache.delete(oldestKey!);
       }
     }
     

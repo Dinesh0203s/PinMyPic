@@ -60,7 +60,7 @@ export class CacheManager {
   // Clean expired entries
   cleanup(): void {
     const now = Date.now();
-    for (const [key, item] of this.cache.entries()) {
+    for (const [key, item] of Array.from(this.cache.entries())) {
       if (now - item.timestamp > item.ttl) {
         this.cache.delete(key);
       }
@@ -116,7 +116,7 @@ export const invalidateRelatedCache = (pattern: string): void => {
   const cache = apiCache as any;
   const keys = Array.from(cache.cache.keys());
   
-  keys.forEach(key => {
+  keys.forEach((key: any) => {
     if (key.includes(pattern)) {
       cache.cache.delete(key);
     }

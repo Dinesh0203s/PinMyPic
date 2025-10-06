@@ -93,106 +93,104 @@ const SavedPhotos = () => {
     }
 
     setDownloadingAll(true);
-    try {
-      const zip = new JSZip();
-      let downloadCount = 0;
-      let errorCount = 0;
-      
-      // Show initial progress
+    
+    // Determine batch size based on total photos
+    const batchSize = photos.length < 500 ? 50 : 100;
+    const totalBatches = Math.ceil(photos.length / batchSize);
+    
       toast({
-        title: "Starting Download",
-        description: `Preparing ${photos.length} saved photos for download...`
-      });
+      title: "Preparing Downloads",
+      description: `Creating ${totalBatches} ZIP files with ${batchSize} photos each...`
+    });
 
-      // Batch download with concurrency limit for better performance
-      const BATCH_SIZE = 5; // Download 5 photos at a time
-      const batches = [];
-      
-      for (let i = 0; i < photos.length; i += BATCH_SIZE) {
-        batches.push(photos.slice(i, i + BATCH_SIZE));
-      }
-
-      // Process batches sequentially but photos within batch concurrently
-      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-        const batch = batches[batchIndex];
+    try {
+      // Process photos in batches
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const startIndex = batchIndex * batchSize;
+        const endIndex = Math.min(startIndex + batchSize, photos.length);
+        const batchPhotos = photos.slice(startIndex, endIndex);
         
-        const batchPromises = batch.map(async (photo, index) => {
+        // Create ZIP for this batch
+        const zip = new JSZip();
+        let successCount = 0;
+        let errorCount = 0;
+        
+        // Download photos in this batch
+        for (let i = 0; i < batchPhotos.length; i++) {
+          const photo = batchPhotos[i];
           try {
             const downloadUrl = photo.url.includes('/api/images/') 
-              ? `${photo.url}?download=true&quality=85` // Reduced quality for faster download
+              ? `${photo.url}?download=true&quality=85`
               : photo.url;
             
             const response = await fetch(downloadUrl);
             if (!response.ok) throw new Error(`Failed to fetch ${photo.filename}`);
             
             const blob = await response.blob();
-            const filename = photo.filename || `saved_photo_${batchIndex * BATCH_SIZE + index + 1}.jpg`;
+            const extension = photo.filename?.split('.').pop() || 'jpg';
+            const safeFilename = `saved_photo_${startIndex + i + 1}.${extension}`;
+            zip.file(`Saved Photos/${safeFilename}`, blob);
+            successCount++;
             
-            // Add to zip in "Saved Photos" folder
-            zip.file(`Saved Photos/${filename}`, blob);
-            downloadCount++;
+            // Update progress
+            const progress = Math.round(((batchIndex * batchSize) + i + 1) / photos.length * 100);
+            toast({
+              title: "Downloading Saved Photos",
+              description: `Batch ${batchIndex + 1}/${totalBatches}: ${progress}% complete`
+            });
             
-            return true;
           } catch (error) {
             console.error(`Error downloading photo ${photo.filename}:`, error);
             errorCount++;
-            return false;
           }
-        });
-
-        // Wait for current batch to complete
-        await Promise.all(batchPromises);
-        
-        // Update progress after each batch
-        toast({
-          title: "Download Progress",
-          description: `Downloaded ${downloadCount} of ${photos.length} photos...`
-        });
-        
-        // Small delay between batches to prevent overwhelming the server
-        if (batchIndex < batches.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 200));
         }
-      }
-
-      if (downloadCount === 0) {
-        toast({
-          title: "Download Failed",
-          description: "Unable to download any photos. Please try again.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Generate and download zip file with faster compression
-      toast({
-        title: "Creating ZIP File",
-        description: "Compressing photos into ZIP file..."
-      });
-
+        
+        if (successCount > 0) {
+          // Generate and download ZIP for this batch
       const zipBlob = await zip.generateAsync({
         type: 'blob',
         compression: 'DEFLATE',
         compressionOptions: { level: 3 }, // Faster compression
-        streamFiles: true // Use streaming for better memory management
+            streamFiles: true
       });
 
-      // Create download link
-      const url = window.URL.createObjectURL(zipBlob);
+          // Create download link with better browser compatibility
+          const url = URL.createObjectURL(zipBlob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'saved_photos.zip';
+          link.download = `saved_photos_batch_${batchIndex + 1}_of_${totalBatches}.zip`;
+          link.style.display = 'none';
       document.body.appendChild(link);
+          
+          // Trigger download with better error handling
+          try {
       link.click();
+            console.log(`Downloaded saved photos batch ${batchIndex + 1} of ${totalBatches}`);
+          } catch (error) {
+            console.error('Download failed:', error);
+            // Fallback: open in new window
+            window.open(url, '_blank');
+          }
+          
+          // Cleanup with delay to ensure download starts
+          setTimeout(() => {
+            URL.revokeObjectURL(url);
+            if (document.body.contains(link)) {
+              document.body.removeChild(link);
+            }
+          }, 1000);
+        }
+        
+        // Small delay between batches to prevent overwhelming the server
+        if (batchIndex < totalBatches - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
       
-      // Cleanup
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(link);
-
-      // Show success message
+      // Final success message
       toast({
         title: "Download Complete",
-        description: `Successfully downloaded ${downloadCount} saved photos${errorCount > 0 ? ` (${errorCount} failed)` : ''}.`
+        description: `Successfully created ${totalBatches} ZIP files with ${photos.length} saved photos total.`
       });
 
     } catch (error) {

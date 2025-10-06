@@ -195,7 +195,7 @@ const Events = () => {
   };
 
 
-  // Download all photos with progress modal
+  // Download all photos with batch-wise ZIP creation
   const downloadAllPhotos = async () => {
     if (photos.length === 0) {
       toast({
@@ -207,27 +207,125 @@ const Events = () => {
     }
 
     const eventTitle = selectedEvent?.title || 'photos';
+    const safeEventTitle = eventTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     
-    // Prepare download items
-    const downloadItems = photos.map((photo, index) => ({
-      id: `${photo.id}-${index}`,
-      filename: photo.filename || `photo_${index + 1}.jpg`,
-      url: photo.url.includes('/api/images/') 
-        ? `${photo.url}?download=true`
-        : photo.url
-    }));
+    // Determine batch size based on total photos
+    const batchSize = photos.length < 500 ? 50 : 100;
+    const totalBatches = Math.ceil(photos.length / batchSize);
+    
+    toast({
+      title: "Preparing Downloads",
+      description: `Creating ${totalBatches} ZIP files with ${batchSize} photos each...`
+    });
 
-    // Add downloads to manager
-    downloadManager.addDownloads(downloadItems);
-    
-    // Show progress modal
-    setShowDownloadModal(true);
-    
-    // Start downloads with ZIP creation
-    const zipFilename = `${eventTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_photos.zip`;
-    downloadManager.startDownloads(zipFilename);
+    console.log(`Starting batch download: ${photos.length} photos, ${totalBatches} batches, ${batchSize} per batch`);
 
-    // No toast - progress modal shows all feedback
+    try {
+      // Process photos in batches
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const startIndex = batchIndex * batchSize;
+        const endIndex = Math.min(startIndex + batchSize, photos.length);
+        const batchPhotos = photos.slice(startIndex, endIndex);
+        
+        // Create ZIP for this batch
+        const zip = new JSZip();
+        let successCount = 0;
+        let errorCount = 0;
+        
+        // Download photos in this batch
+        for (let i = 0; i < batchPhotos.length; i++) {
+          const photo = batchPhotos[i];
+          try {
+            const downloadUrl = photo.url.includes('/api/images/') 
+              ? `${photo.url}?download=true&quality=85`
+              : photo.url;
+            
+            const response = await fetch(downloadUrl);
+            if (!response.ok) throw new Error(`Failed to fetch ${photo.filename}`);
+            
+            const blob = await response.blob();
+            const extension = photo.filename?.split('.').pop() || 'jpg';
+            const safeFilename = `photo_${startIndex + i + 1}.${extension}`;
+            zip.file(safeFilename, blob);
+            successCount++;
+            
+            // Update progress
+            const progress = Math.round(((batchIndex * batchSize) + i + 1) / photos.length * 100);
+            toast({
+              title: "Downloading Photos",
+              description: `Batch ${batchIndex + 1}/${totalBatches}: ${progress}% complete`
+            });
+            
+          } catch (error) {
+            console.error(`Error downloading photo ${photo.filename}:`, error);
+            errorCount++;
+          }
+        }
+        
+        if (successCount > 0) {
+          // Generate and download ZIP for this batch
+          const zipBlob = await zip.generateAsync({
+            type: 'blob',
+            compression: 'DEFLATE',
+            compressionOptions: { level: 3 }, // Faster compression
+            streamFiles: true
+          });
+          
+          // Validate ZIP blob
+          if (!zipBlob || zipBlob.size === 0) {
+            console.error(`Empty ZIP blob for batch ${batchIndex + 1}`);
+            continue;
+          }
+          
+          console.log(`Generated ZIP for batch ${batchIndex + 1}: ${zipBlob.size} bytes`);
+          
+          // Create download link with better browser compatibility
+          const url = URL.createObjectURL(zipBlob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${safeEventTitle}_batch_${batchIndex + 1}_of_${totalBatches}.zip`;
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          
+          // Trigger download with better error handling
+          try {
+            link.click();
+            console.log(`Downloaded batch ${batchIndex + 1} of ${totalBatches}`);
+          } catch (error) {
+            console.error('Download failed:', error);
+            // Fallback: open in new window
+            window.open(url, '_blank');
+          }
+          
+          // Cleanup with delay to ensure download starts
+          setTimeout(() => {
+            URL.revokeObjectURL(url);
+            if (document.body.contains(link)) {
+              document.body.removeChild(link);
+            }
+          }, 1000);
+        }
+        
+        // Small delay between batches to prevent overwhelming the server
+        if (batchIndex < totalBatches - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      // Final success message
+      toast({
+        title: "Download Complete",
+        description: `Successfully created ${totalBatches} ZIP files with ${photos.length} photos total.`
+      });
+      
+    } catch (error) {
+      console.error('Error creating batch ZIP files:', error);
+      toast({
+        title: "Download Failed",
+        description: "An error occurred while creating the ZIP files.",
+        variant: "destructive"
+      });
+    }
   };
 
   // Navigation functions for slideshow
@@ -859,22 +957,21 @@ const Events = () => {
     }
   }, [showInlineGallery]);
 
-  // Close download modal when navigating back to events list
+  // Close download modal when navigating back to events list or switching events
+  const [previousEventId, setPreviousEventId] = useState<string | null>(null);
   useEffect(() => {
+    // Close modal when navigating back to events list
     if (!showInlineGallery && showDownloadModal) {
       setShowDownloadModal(false);
     }
-  }, [showInlineGallery, showDownloadModal]);
 
-  // Close download modal when switching events (but not on initial load)
-  const [previousEventId, setPreviousEventId] = useState<string | null>(null);
-  useEffect(() => {
+    // Close modal when switching to a different event (but not on initial load)
     if (selectedEvent?.id && previousEventId && selectedEvent.id !== previousEventId && showDownloadModal) {
-      // Reset download modal when switching to a different event
       setShowDownloadModal(false);
     }
+    
     setPreviousEventId(selectedEvent?.id || null);
-  }, [selectedEvent?.id, previousEventId, showDownloadModal]);
+  }, [showInlineGallery, selectedEvent?.id, previousEventId, showDownloadModal]);
 
   // Show inline gallery instead of events list
   if (showInlineGallery && selectedEvent) {
@@ -893,6 +990,8 @@ const Events = () => {
                     setShowInlineGallery(false);
                     setSelectedEvent(null);
                     setPhotos([]);
+                    // Close download modal if open
+                    setShowDownloadModal(false);
                     // Refresh events data when navigating back
                     if (events.length === 0) {
                       fetchEvents(currentPage, debouncedSearchTerm, sortBy, sortOrder);

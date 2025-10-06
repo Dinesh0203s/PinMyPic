@@ -75,7 +75,6 @@ export function PhotoUploadDialog({
           if (isPageRefresh) {
             // Automatically clear localStorage on page refresh to prevent errors
             clearPersistedState();
-            console.log('Upload state cleared due to page refresh');
             return;
           }
 
@@ -184,7 +183,6 @@ export function PhotoUploadDialog({
       setWakeLock(wakeLock);
       
       wakeLock.addEventListener('release', () => {
-        console.log('Wake lock was released');
       });
       
       toast({
@@ -502,7 +500,6 @@ export function PhotoUploadDialog({
     try {
       const pendingFiles = uploadFiles.filter(f => f.status === 'pending');
       
-      console.log(`Starting dynamic upload processing: ${pendingFiles.length} files`);
       
       // Use dynamic upload processing instead of traditional batching
       await uploadQueueManager.startDynamicProcessing(
@@ -511,7 +508,6 @@ export function PhotoUploadDialog({
         updateUploadFiles,
         (stats) => {
           setDynamicStats(stats);
-          console.log(`Dynamic upload progress: ${stats.completed}/${stats.total} completed, ${stats.uploading} uploading, ${stats.throughput.toFixed(2)} files/sec`);
         },
         `upload_${eventId}_${Date.now()}`
       );

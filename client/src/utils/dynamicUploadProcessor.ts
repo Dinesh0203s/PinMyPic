@@ -60,7 +60,6 @@ export class DynamicUploadProcessor {
       progress: 0
     }));
 
-    console.log(`Starting dynamic upload processing: ${this.uploadQueue.length} files, max ${this.maxConcurrent} concurrent`);
 
     // Start processing with max concurrent uploads
     const promises: Promise<void>[] = [];
@@ -74,7 +73,6 @@ export class DynamicUploadProcessor {
     const totalTime = (Date.now() - this.startTime) / 1000;
     const throughput = this.completedCount / totalTime;
     
-    console.log(`Dynamic upload processing completed: ${this.completedCount}/${this.uploadQueue.length} files in ${totalTime.toFixed(2)}s (${throughput.toFixed(2)} files/sec)`);
   }
 
   /**

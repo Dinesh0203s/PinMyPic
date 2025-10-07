@@ -522,7 +522,7 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
       open={open} 
       onOpenChange={fullScreenImage ? undefined : onOpenChange} // Prevent closing when in slideshow
     >
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-4">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm sm:text-base">
             <Button 
@@ -542,18 +542,21 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="details" className="flex items-center gap-2">
-              <Edit className="h-4 w-4" />
-              Event Details
+          <TabsList className="grid w-full grid-cols-3 h-auto p-1">
+            <TabsTrigger value="details" className="flex items-center gap-1 text-xs sm:text-sm px-2 py-2 whitespace-nowrap">
+              <Edit className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+              <span className="hidden sm:inline">Event Details</span>
+              <span className="sm:hidden">Details</span>
             </TabsTrigger>
-            <TabsTrigger value="gallery" className="flex items-center gap-2">
-              <Camera className="h-4 w-4" />
-              Photo Gallery ({event.photoCount})
+            <TabsTrigger value="gallery" className="flex items-center gap-1 text-xs sm:text-sm px-2 py-2 whitespace-nowrap">
+              <Camera className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+              <span className="hidden sm:inline">Photo Gallery ({event.photoCount})</span>
+              <span className="sm:hidden">Gallery ({event.photoCount})</span>
             </TabsTrigger>
-            <TabsTrigger value="thumbnail" className="flex items-center gap-2">
-              <ImageIcon className="h-4 w-4" />
-              Edit Thumbnail
+            <TabsTrigger value="thumbnail" className="flex items-center gap-1 text-xs sm:text-sm px-2 py-2 whitespace-nowrap">
+              <ImageIcon className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+              <span className="hidden sm:inline">Edit Thumbnail</span>
+              <span className="sm:hidden">Thumbnail</span>
             </TabsTrigger>
           </TabsList>
 

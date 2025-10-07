@@ -33,6 +33,21 @@ export function CreateEventDialog({ onEventCreated }: CreateEventDialogProps) {
   const [loading, setLoading] = useState(false);
   const { currentUser } = useAuth();
 
+  // Get authentication headers
+  const getAuthHeaders = async (): Promise<Record<string, string>> => {
+    if (!currentUser) return {};
+    try {
+      const token = await currentUser.getIdToken();
+      return {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+    } catch (error) {
+      console.error('Error getting auth token:', error);
+      return {};
+    }
+  };
+
   const generatePin = (length = 6) => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
@@ -59,11 +74,12 @@ export function CreateEventDialog({ onEventCreated }: CreateEventDialogProps) {
 
     setLoading(true);
     try {
+      // Get authentication headers
+      const headers = await getAuthHeaders();
+      
       const response = await fetch('/api/events', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify({
           ...formData,
           eventDate: formData.eventDate?.toISOString()
@@ -72,7 +88,6 @@ export function CreateEventDialog({ onEventCreated }: CreateEventDialogProps) {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('Event created successfully:', result);
         setOpen(false);
         setFormData({
           title: '',
@@ -88,8 +103,10 @@ export function CreateEventDialog({ onEventCreated }: CreateEventDialogProps) {
         });
         onEventCreated();
       } else {
-        console.error('Failed to create event');
-        alert('Failed to create event');
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+        console.error('Failed to create event:', errorMessage);
+        alert(`Failed to create event: ${errorMessage}`);
       }
     } catch (error) {
       console.error('Error creating event:', error);
@@ -279,8 +296,8 @@ export function CreateEventDialog({ onEventCreated }: CreateEventDialogProps) {
               </div>
               <div className="text-xs text-blue-600 sm:text-right">
                 {formData.enableImageCompression 
-                  ? "Images will be compressed before upload (faster upload, smaller files)" 
-                  : "Original images will be uploaded (slower upload, larger files)"
+                  ? "Images will be compressed and uploaded automatically (faster upload, smaller files)" 
+                  : "Original images will be uploaded manually (slower upload, larger files)"
                 }
               </div>
             </div>

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar, Clock, MapPin, Phone, Mail, User, Users, Package, MessageSquare, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface CreateBookingDialogProps {
   onBookingCreated: () => void;
@@ -17,6 +18,22 @@ export function CreateBookingDialog({ onBookingCreated }: CreateBookingDialogPro
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { currentUser } = useAuth();
+
+  // Get authentication headers
+  const getAuthHeaders = async (): Promise<Record<string, string>> => {
+    if (!currentUser) return {};
+    try {
+      const token = await currentUser.getIdToken();
+      return {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+    } catch (error) {
+      console.error('Error getting auth token:', error);
+      return {};
+    }
+  };
 
   const [formData, setFormData] = useState({
     name: '',
@@ -79,16 +96,19 @@ export function CreateBookingDialog({ onBookingCreated }: CreateBookingDialogPro
         guestCount: formData.guestCount ? parseInt(formData.guestCount) : undefined,
       };
 
+      // Get authentication headers
+      const headers = await getAuthHeaders();
+      
       const response = await fetch('/api/bookings', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(bookingData),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create booking');
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+        throw new Error(`Failed to create booking: ${errorMessage}`);
       }
 
       toast({

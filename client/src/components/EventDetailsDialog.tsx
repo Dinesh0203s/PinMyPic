@@ -673,8 +673,8 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
                       </div>
                       <div className="text-xs text-blue-600 sm:text-right">
                         {editData.enableImageCompression 
-                          ? "Images will be compressed before upload (faster upload, smaller files)" 
-                          : "Original images will be uploaded (slower upload, larger files)"
+                          ? "Images will be compressed and uploaded automatically (faster upload, smaller files)" 
+                          : "Original images will be uploaded manually (slower upload, larger files)"
                         }
                       </div>
                     </div>

@@ -55,6 +55,7 @@ import { ManageUsersDialog } from '@/components/ManageUsersDialog';
 import { EditableEventRow } from '@/components/EditableEventRow';
 import { EventDetailsDialog } from '@/components/EventDetailsDialog';
 import { AnalyticsReport } from '@/components/AnalyticsReport';
+import { AdminDashboardSkeleton } from '@/components/AdminDashboardSkeleton';
 
 import { AdminUsersManagement } from '@/components/AdminUsersManagement';
 import AdminRoleManagement from '@/components/AdminRoleManagement';
@@ -131,6 +132,7 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [lastFetchTime, setLastFetchTime] = useState<number>(0);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [uploadGalleryOpen, setUploadGalleryOpen] = useState(false);
   const [selectedEventForUpload, setSelectedEventForUpload] = useState<Event | null>(null);
@@ -317,6 +319,17 @@ const AdminDashboard = () => {
   useEffect(() => {
     const fetchAdminData = async () => {
       try {
+        // Check if we have cached data and it's recent (less than 2 minutes old)
+        const now = Date.now();
+        const cacheAge = now - lastFetchTime;
+        const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
+        
+        if (lastFetchTime > 0 && cacheAge < CACHE_DURATION && !refreshing) {
+          console.log('Admin Dashboard: Using cached data');
+          setLoading(false);
+          return;
+        }
+
         setLoading(true);
         console.log('Admin Dashboard: Starting parallel data fetch...');
 
@@ -344,16 +357,20 @@ const AdminDashboard = () => {
         // Fetch events separately with pagination
         await fetchEvents(eventCurrentPage, eventSearchTerm, eventSortBy, eventSortOrder);
         
+        // Update cache timestamp
+        setLastFetchTime(now);
+        
         console.log('Admin Dashboard: Data fetch completed');
       } catch (error) {
         console.error('Admin Dashboard: General error:', error);
       } finally {
         setLoading(false);
+        setRefreshing(false);
       }
     };
 
     fetchAdminData();
-  }, [currentUser]);
+  }, [currentUser, refreshTrigger]);
 
   // Handle events pagination updates
   useEffect(() => {
@@ -367,7 +384,6 @@ const AdminDashboard = () => {
     const handlePageFocus = () => {
       // Only refresh events if the events array is empty and we're not loading
       if (events.length === 0 && !loading && currentUser) {
-        console.log('Admin Dashboard: Page focused - refreshing events data');
         fetchEvents(eventCurrentPage, eventSearchTerm, eventSortBy, eventSortOrder);
       }
     };
@@ -389,23 +405,20 @@ const AdminDashboard = () => {
 
   const handleBookingAction = async (bookingId: string, status: 'confirmed' | 'cancelled' | 'pending') => {
     try {
-      console.log(`Updating booking ${bookingId} to status: ${status}`);
+      const headers = await getAuthHeaders();
       const response = await fetch(`/api/bookings/${bookingId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify({ status })
       });
 
       if (response.ok) {
-        console.log('Booking status updated successfully');
         // Refresh bookings data
-        const bookingsRes = await fetch('/api/bookings');
+        const headers = await getAuthHeaders();
+        const bookingsRes = await fetch('/api/bookings', { headers });
         if (bookingsRes.ok) {
           const bookingsData = await bookingsRes.json();
           setBookings(bookingsData);
-          console.log('Bookings data refreshed');
         }
       } else {
         console.error('Failed to update booking status:', response.statusText);
@@ -427,18 +440,15 @@ const AdminDashboard = () => {
 
   const handleAmountChange = async (bookingId: string, amount: number) => {
     try {
-      console.log(`Updating booking ${bookingId} amount to: ${amount}`);
+      const headers = await getAuthHeaders();
       const response = await fetch(`/api/bookings/${bookingId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify({ amount })
       });
 
       if (response.ok) {
         const updatedBooking = await response.json();
-        console.log('Amount updated successfully:', updatedBooking);
         
         // Update local state immediately
         setBookings(prevBookings => 
@@ -471,22 +481,19 @@ const AdminDashboard = () => {
 
   const handleDeleteBooking = async (bookingId: string) => {
     try {
-      console.log(`Deleting booking: ${bookingId}`);
+      const headers = await getAuthHeaders();
       const response = await fetch(`/api/bookings/${bookingId}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers
       });
 
       if (response.ok) {
-        console.log('Booking deleted successfully');
         // Refresh bookings data
-        const bookingsRes = await fetch('/api/bookings');
+        const headers = await getAuthHeaders();
+        const bookingsRes = await fetch('/api/bookings', { headers });
         if (bookingsRes.ok) {
           const bookingsData = await bookingsRes.json();
           setBookings(bookingsData);
-          console.log('Bookings data refreshed after deletion');
         }
         toast({
           title: "Success",
@@ -698,51 +705,8 @@ const AdminDashboard = () => {
 
   const refreshData = async () => {
     setRefreshing(true);
-    try {
-      console.log('Refreshing admin dashboard data...');
-
-      const [statsRes, storageRes, bookingsRes, messagesRes] = await Promise.all([
-        fetch('/api/admin/stats').catch(() => ({ ok: false })),
-        fetch('/api/admin/storage').catch(() => ({ ok: false })),
-        fetch('/api/bookings').catch(() => ({ ok: false })),
-        fetch('/api/contact').catch(() => ({ ok: false }))
-      ]);
-
-      if (statsRes.ok && 'json' in statsRes) {
-        const statsData = await statsRes.json();
-        setStats(statsData);
-      }
-
-      if (storageRes.ok && 'json' in storageRes) {
-        const storageData = await storageRes.json();
-        setStorageStats(storageData);
-      }
-
-      if (bookingsRes.ok && 'json' in bookingsRes) {
-        const bookingsData = await bookingsRes.json();
-        setBookings(bookingsData || []);
-      }
-
-      if (messagesRes.ok && 'json' in messagesRes) {
-        const messagesData = await messagesRes.json();
-        setMessages(messagesData || []);
-      }
-
-      // Refresh events data using the paginated fetchEvents function
-      await fetchEvents(eventCurrentPage, eventSearchTerm, eventSortBy, eventSortOrder);
-
-      // Refresh packages data
-      await fetchPackages();
-
-      // Trigger users data refresh by incrementing the refresh trigger
-      setRefreshTrigger(prev => prev + 1);
-
-      console.log('Admin dashboard data refreshed successfully');
-    } catch (error) {
-      console.error('Error refreshing admin data:', error);
-    } finally {
-      setRefreshing(false);
-    }
+    setLastFetchTime(0); // Clear cache to force fresh data
+    setRefreshTrigger(prev => prev + 1);
   };
 
   const handleViewEvent = (event: Event) => {
@@ -954,10 +918,10 @@ const AdminDashboard = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               {hasPermission(userData, 'bookings') && (
                 <CreateBookingDialog onBookingCreated={() => {
-                  console.log('Booking created, refreshing data...');
                   const refreshData = async () => {
                     try {
-                      const bookingsRes = await fetch('/api/bookings');
+                      const headers = await getAuthHeaders();
+                      const bookingsRes = await fetch('/api/bookings', { headers });
                       if (bookingsRes.ok) {
                         const bookingsData = await bookingsRes.json();
                         setBookings(bookingsData);
@@ -971,7 +935,6 @@ const AdminDashboard = () => {
               )}
               {hasPermission(userData, 'events') && (
                 <CreateEventDialog onEventCreated={() => {
-                  console.log('Event created, refreshing data...');
                   const refreshData = async () => {
                     try {
                       const eventsRes = await fetch('/api/admin/events');
@@ -989,7 +952,6 @@ const AdminDashboard = () => {
 
               {hasPermission(userData, 'users') && (
                 <ManageUsersDialog onUserUpdated={() => {
-                  console.log('User updated, refreshing data...');
                 }} />
               )}
               {hasPermission(userData, 'events') && (
@@ -1009,20 +971,7 @@ const AdminDashboard = () => {
 
         {/* Stats Cards */}
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
-            {[1, 2, 3, 4].map((i) => (
-              <Card key={i} className="animate-pulse">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <div className="h-4 bg-gray-200 rounded w-24"></div>
-                  <div className="h-4 w-4 bg-gray-200 rounded"></div>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-8 bg-gray-200 rounded w-16 mb-2"></div>
-                  <div className="h-3 bg-gray-200 rounded w-20"></div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <AdminDashboardSkeleton />
         ) : stats ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
             <Card>
@@ -1756,10 +1705,10 @@ const AdminDashboard = () => {
                     {/* Create New Booking Button */}
                     <div className="flex items-center">
                       <CreateBookingDialog onBookingCreated={() => {
-                        console.log('Booking created from bookings tab, refreshing data...');
                         const refreshData = async () => {
                           try {
-                            const bookingsRes = await fetch('/api/bookings');
+                            const headers = await getAuthHeaders();
+                            const bookingsRes = await fetch('/api/bookings', { headers });
                             if (bookingsRes.ok) {
                               const bookingsData = await bookingsRes.json();
                               setBookings(bookingsData);
@@ -1995,7 +1944,8 @@ const AdminDashboard = () => {
                         <CreateBookingDialog onBookingCreated={() => {
                           const refreshData = async () => {
                             try {
-                              const bookingsRes = await fetch('/api/bookings');
+                              const headers = await getAuthHeaders();
+                              const bookingsRes = await fetch('/api/bookings', { headers });
                               if (bookingsRes.ok) {
                                 const bookingsData = await bookingsRes.json();
                                 setBookings(bookingsData);

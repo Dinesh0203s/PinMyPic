@@ -575,6 +575,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         publicPin: req.body.publicPin || '',
         brideGroomPin: req.body.brideGroomPin || '',
         thumbnailUrl: req.body.thumbnailUrl || '',
+        enableImageCompression: req.body.enableImageCompression || false,
         createdBy: req.user?.userData?.id || 'admin'
       };
       
@@ -1908,7 +1909,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin dashboard stats
+  // Admin dashboard stats with caching
   app.get("/api/admin/stats", async (req: any, res) => {
     // Development bypass for authentication issues
     if (process.env.NODE_ENV === 'development') {
@@ -1923,7 +1924,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       };
     }
+    
     try {
+      // Set cache headers for 2 minutes
+      res.set({
+        'Cache-Control': 'public, max-age=120',
+        'ETag': `stats-${Date.now()}`
+      });
+
       const [events, bookings, messages] = await Promise.all([
         storage.getEvents(),
         storage.getBookings(),
@@ -1948,7 +1956,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Storage statistics endpoint
+  // Storage statistics endpoint with caching
   app.get("/api/admin/storage", async (req: any, res) => {
     // Development bypass for authentication issues
     if (process.env.NODE_ENV === 'development') {
@@ -1963,7 +1971,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       };
     }
+    
     try {
+      // Set cache headers for 5 minutes (storage stats change less frequently)
+      res.set({
+        'Cache-Control': 'public, max-age=300',
+        'ETag': `storage-${Date.now()}`
+      });
       const [events, bookings, messages, packages, users] = await Promise.all([
         storage.getEvents(),
         storage.getBookings(),

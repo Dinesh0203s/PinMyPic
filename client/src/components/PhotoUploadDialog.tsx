@@ -6,7 +6,8 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Upload, Camera, X, FileImage, AlertCircle, CheckCircle, Smartphone, Shield } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { Upload, Camera, X, FileImage, AlertCircle, CheckCircle, Smartphone, Shield, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { UploadOptimizer, MemoryMonitor } from '@/utils/uploadOptimizer';
 import { uploadQueueManager, DynamicUploadStats } from '@/utils/dynamicUploadProcessor';
@@ -46,6 +47,8 @@ export function PhotoUploadDialog({
   const [wakeLock, setWakeLock] = useState<WakeLockSentinel | null>(null);
   const [hasWakeLockSupport, setHasWakeLockSupport] = useState(false);
   const [dynamicStats, setDynamicStats] = useState<DynamicUploadStats | null>(null);
+  const [compressionQuality, setCompressionQuality] = useState<number>(1.0);
+  const [showCompressionSettings, setShowCompressionSettings] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -297,54 +300,153 @@ export function PhotoUploadDialog({
       });
     }
 
-    let processedFiles: File[] = imageFiles;
-
-    // Apply compression if enabled
+    // Apply compression if enabled - process individually for immediate upload
     if (eventCompressionSetting) {
-      try {
+      toast({
+        title: "Starting compression and auto-upload",
+        description: `Processing ${imageFiles.length} images individually and uploading automatically...`,
+      });
+
+      // Set uploading state to true for auto-upload
+      setIsUploading(true);
+
+      // Request wake lock for auto-upload
+      if (hasWakeLockSupport) {
+        await requestWakeLock();
+      }
+
+      // Process each image individually, compress, and upload immediately
+      for (let i = 0; i < imageFiles.length; i++) {
+        const file = imageFiles[i];
         
+        try {
+          // Compress individual image
+          const compressionResult = await imageCompressor.compressImage(file, {
+            quality: compressionQuality,
+            maxWidth: 1920,
+            maxHeight: 1080,
+            format: imageCompressor.isWebPSupported() ? 'webp' : 'jpeg'
+          });
+
+          // Create upload file with compressed image
+          const uploadFile: UploadFile = {
+            file: compressionResult.compressedFile,
+            id: `${Date.now()}-${Math.random()}`,
+            progress: 0,
+            status: 'pending'
+          };
+
+          // Add to upload queue immediately
+          updateUploadFiles(prev => [...prev, uploadFile]);
+
+          // Show compression progress
+          const compressionRatio = compressionResult.compressionRatio;
+          const originalSizeMB = Math.round(compressionResult.originalSize / 1024 / 1024 * 100) / 100;
+          const compressedSizeMB = Math.round(compressionResult.compressedSize / 1024 / 1024 * 100) / 100;
+          
+          toast({
+            title: `Image ${i + 1}/${imageFiles.length} compressed`,
+            description: `${compressionRatio}% smaller (${originalSizeMB}MB → ${compressedSizeMB}MB) at ${Math.round(compressionQuality * 100)}% quality - Auto-uploading...`,
+          });
+
+          // Auto-upload the compressed image immediately
+          try {
+            await uploadPhoto(uploadFile);
+            
+            toast({
+              title: `Image ${i + 1}/${imageFiles.length} uploaded`,
+              description: `${file.name} uploaded successfully`,
+            });
+          } catch (uploadError) {
+            console.error(`Auto-upload failed for ${file.name}:`, uploadError);
+            
+            // Update status to error
+            updateUploadFiles(prev => prev.map(f => 
+              f.id === uploadFile.id ? { 
+                ...f, 
+                status: 'error' as const, 
+                error: uploadError instanceof Error ? uploadError.message : 'Auto-upload failed'
+              } : f
+            ));
+            
+            toast({
+              title: `Upload failed for ${file.name}`,
+              description: "Auto-upload failed, you can retry manually",
+              variant: "destructive"
+            });
+          }
+
+        } catch (error) {
+          console.error(`Compression failed for ${file.name}:`, error);
+          
+          // Fallback to original file if compression fails
+          const uploadFile: UploadFile = {
+            file: file,
+            id: `${Date.now()}-${Math.random()}`,
+            progress: 0,
+            status: 'pending'
+          };
+
+          updateUploadFiles(prev => [...prev, uploadFile]);
+          
+          toast({
+            title: `Compression failed for ${file.name}`,
+            description: "Using original image instead - Auto-uploading...",
+            variant: "destructive"
+          });
+
+          // Try to auto-upload the original file
+          try {
+            await uploadPhoto(uploadFile);
+          } catch (uploadError) {
+            console.error(`Auto-upload failed for original ${file.name}:`, uploadError);
+            
+            updateUploadFiles(prev => prev.map(f => 
+              f.id === uploadFile.id ? { 
+                ...f, 
+                status: 'error' as const, 
+                error: uploadError instanceof Error ? uploadError.message : 'Auto-upload failed'
+              } : f
+            ));
+          }
+        }
+      }
+
+      // Show final auto-upload summary
+      const finalErrorCount = uploadFiles.filter(f => f.status === 'error').length;
+      const finalSuccessCount = uploadFiles.filter(f => f.status === 'completed').length;
+
+      if (finalSuccessCount > 0) {
         toast({
-          title: "Compressing images",
-          description: `Compressing ${imageFiles.length} images for faster upload...`,
+          title: "Auto-upload complete",
+          description: `${finalSuccessCount} photos uploaded automatically to ${eventTitle}`,
         });
+        onPhotosUploaded();
+      }
 
-        const compressionResults = await imageCompressor.compressImages(imageFiles, {
-          quality: 0.8,
-          maxWidth: 1920,
-          maxHeight: 1080,
-          format: imageCompressor.isWebPSupported() ? 'webp' : 'jpeg'
-        });
-
-        processedFiles = compressionResults.map(result => result.compressedFile);
-        
-        const totalOriginalSize = compressionResults.reduce((sum, result) => sum + result.originalSize, 0);
-        const totalCompressedSize = compressionResults.reduce((sum, result) => sum + result.compressedSize, 0);
-        const avgCompressionRatio = Math.round((1 - totalCompressedSize / totalOriginalSize) * 100);
-
-
+      if (finalErrorCount > 0) {
         toast({
-          title: "Compression complete",
-          description: `Images compressed by ${avgCompressionRatio}% (${Math.round(totalOriginalSize / 1024 / 1024)}MB → ${Math.round(totalCompressedSize / 1024 / 1024)}MB)`,
-        });
-      } catch (error) {
-        console.error('Compression failed:', error);
-        toast({
-          title: "Compression failed",
-          description: "Using original images instead.",
+          title: "Some auto-uploads failed",
+          description: `${finalErrorCount} photos failed to upload automatically`,
           variant: "destructive"
         });
-        processedFiles = imageFiles;
       }
+
+      // Reset uploading state and release wake lock
+      setIsUploading(false);
+      await releaseWakeLock();
+
+    } else {
+      // No compression - add all files to upload queue at once
+      const newUploadFiles: UploadFile[] = imageFiles.map(file => ({
+        file,
+        id: `${Date.now()}-${Math.random()}`,
+        progress: 0,
+        status: 'pending'
+      }));
+
+      updateUploadFiles(prev => [...prev, ...newUploadFiles]);
     }
-
-    const newUploadFiles: UploadFile[] = processedFiles.map(file => ({
-      file,
-      id: `${Date.now()}-${Math.random()}`,
-      progress: 0,
-      status: 'pending'
-    }));
-
-    updateUploadFiles(prev => [...prev, ...newUploadFiles]);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -627,11 +729,68 @@ export function PhotoUploadDialog({
             </div>
             {eventCompressionSetting && (
               <span className="text-xs text-gray-500">
-                Images will be compressed for faster upload
+                Images will be compressed and uploaded automatically
               </span>
             )}
           </div>
         </DialogHeader>
+
+        {/* Compression Settings */}
+        {eventCompressionSetting && (
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Settings className="h-4 w-4 text-blue-600" />
+                <Label className="text-sm font-medium text-blue-800">
+                  Compression Settings
+                </Label>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowCompressionSettings(!showCompressionSettings)}
+                className="text-blue-600 hover:text-blue-800"
+              >
+                {showCompressionSettings ? 'Hide' : 'Show'} Settings
+              </Button>
+            </div>
+            
+            {showCompressionSettings && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm text-blue-700">
+                      Image Quality: {Math.round(compressionQuality * 100)}%
+                    </Label>
+                    <span className="text-xs text-blue-600">
+                      {compressionQuality === 1.0 ? 'Maximum Quality' : 
+                       compressionQuality >= 0.8 ? 'High Quality' :
+                       compressionQuality >= 0.6 ? 'Medium Quality' : 'Low Quality'}
+                    </span>
+                  </div>
+                  <Slider
+                    value={[compressionQuality]}
+                    onValueChange={(value) => setCompressionQuality(value[0])}
+                    min={0.1}
+                    max={1.0}
+                    step={0.1}
+                    className="w-full"
+                  />
+                  <div className="flex justify-between text-xs text-blue-500">
+                    <span>10% (Smallest)</span>
+                    <span>100% (Original)</span>
+                  </div>
+                </div>
+                
+                <div className="text-xs text-blue-600 space-y-1">
+                  <p>• Higher quality = larger files, slower uploads</p>
+                  <p>• Lower quality = smaller files, faster uploads</p>
+                  <p>• Images will be resized to max 1920x1080 pixels</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="space-y-6">
           {/* Upload Area */}
@@ -701,7 +860,7 @@ export function PhotoUploadDialog({
                       ? 'bg-green-100 text-green-800' 
                       : 'bg-gray-100 text-gray-600'
                   }`}>
-                    {eventCompressionSetting ? '🔄 Compressed' : '📤 Original'}
+                    {eventCompressionSetting ? '🔄 Auto-Upload' : '📤 Manual Upload'}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -716,7 +875,7 @@ export function PhotoUploadDialog({
                     onClick={handleUploadAll}
                     disabled={isUploading || uploadFiles.every(f => f.status !== 'pending')}
                   >
-                    {isUploading ? 'Uploading...' : 'Upload All'}
+                    {isUploading ? 'Uploading...' : eventCompressionSetting ? 'Upload Remaining' : 'Upload All'}
                   </Button>
                   <Button
                     variant="outline"

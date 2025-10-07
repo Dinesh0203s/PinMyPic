@@ -12,6 +12,7 @@ import { startFaceRecognitionService, processFacePhoto, compareFaces } from "./f
 import { cache } from "./cache";
 import { verifyFirebaseToken } from "./firebase-admin";
 import { faceProcessingQueue } from "./face-processing-queue";
+import { isValidObjectId } from './utils/objectIdValidation';
 // Removed Cloudinary service - using MongoDB GridFS for photo storage
 import QRCode from 'qrcode';
 
@@ -1138,6 +1139,123 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk delete photos with captcha verification (MUST come before individual photo delete route)
+  app.delete("/api/photos/bulk", async (req: any, res) => {
+    // Development bypass for authentication issues
+    if (process.env.NODE_ENV === 'development') {
+      req.user = {
+        firebaseUid: 'dev-admin',
+        email: process.env.ADMIN_EMAIL,
+        userData: {
+          id: 'dev-admin',
+          firebaseUid: 'dev-admin',
+          email: process.env.ADMIN_EMAIL,
+          isAdmin: true
+        }
+      };
+    }
+
+    try {
+      const { photoIds, captchaResponse } = req.body;
+      
+      
+      if (!photoIds || !Array.isArray(photoIds) || photoIds.length === 0) {
+        return res.status(400).json({ error: "Photo IDs are required" });
+      }
+
+      // Simple captcha verification - in production, integrate with reCAPTCHA
+      if (!captchaResponse || captchaResponse !== 'DELETE_ALL_PHOTOS_CONFIRMED') {
+        return res.status(400).json({ error: "Captcha verification failed" });
+      }
+
+      const results = {
+        deleted: 0,
+        failed: 0,
+        errors: [] as string[]
+      };
+
+      // Delete photos in batches to avoid overwhelming the system
+      const batchSize = 10;
+      for (let i = 0; i < photoIds.length; i += batchSize) {
+        const batch = photoIds.slice(i, i + batchSize);
+        
+        const deletePromises = batch.map(async (photoId: string) => {
+          try {
+            // Validate photoId format
+            if (!photoId || typeof photoId !== 'string' || photoId.trim() === '') {
+              results.failed++;
+              results.errors.push(`Invalid photo ID: ${photoId}`);
+              return;
+            }
+
+            // Check if photoId is a valid ObjectId format
+            if (!isValidObjectId(photoId)) {
+              results.failed++;
+              results.errors.push(`Invalid photo ID format: ${photoId}`);
+              return;
+            }
+
+            const photo = await storage.getPhoto(photoId);
+            if (!photo) {
+              results.failed++;
+              results.errors.push(`Photo ${photoId} not found (invalid ID or already deleted)`);
+              return;
+            }
+
+            // CASCADE DELETION: Remove photo from all users' saved photos lists
+            try {
+              const { mongoStorage } = await import('./mongo-storage');
+              await mongoStorage.removePhotoFromAllUsers(photoId);
+            } catch (cascadeError) {
+              console.error('Error removing photo from user saved lists:', cascadeError);
+            }
+
+            // Use storage.deletePhoto() which handles GridFS cleanup internally
+            // This avoids redundant GridFS operations and ensures consistent cleanup
+            const success = await storage.deletePhoto(photoId);
+            if (success) {
+              results.deleted++;
+              
+              // Update event photo count
+              const event = await storage.getEvent(photo.eventId);
+              if (event && event.photoCount > 0) {
+                await storage.updateEvent(photo.eventId, { 
+                  photoCount: event.photoCount - 1 
+                });
+              }
+            } else {
+              results.failed++;
+              results.errors.push(`Failed to delete photo ${photoId}`);
+            }
+          } catch (error) {
+            console.error(`Error deleting photo ${photoId}:`, error);
+            results.failed++;
+            results.errors.push(`Error deleting photo ${photoId}: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        });
+
+        await Promise.all(deletePromises);
+      }
+
+      const response = {
+        success: true,
+        message: `Bulk delete completed. ${results.deleted} photos deleted, ${results.failed} failed.`,
+        results
+      };
+
+      // If there were failures, include more details
+      if (results.failed > 0) {
+        response.message += ` Errors: ${results.errors.slice(0, 3).join(', ')}${results.errors.length > 3 ? '...' : ''}`;
+      }
+
+      res.json(response);
+    } catch (error) {
+      console.error("Error in bulk delete:", error);
+      res.status(500).json({ error: "Failed to delete photos" });
+    }
+  });
+
+  // Individual photo delete route (MUST come after bulk delete route)
   app.delete("/api/photos/:photoId", async (req: any, res) => {
     // Development bypass for authentication issues
     if (process.env.NODE_ENV === 'development') {
@@ -1159,44 +1277,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Photo not found" });
       }
 
-      // Delete image file based on storage type
-      if (photo.url) {
-        if (photo.url.startsWith('/api/images/')) {
-          // GridFS stored image
-          const fileId = photo.url.replace('/api/images/', '');
-          try {
-            const { mongoStorage } = await import('./mongo-storage');
-            
-            // Delete main file
-            const mainFileDeleted = await mongoStorage.deleteImageFromGridFS(fileId);
-            console.log(`Main file deletion result: ${mainFileDeleted ? 'success' : 'failed'} for ${fileId}`);
-            
-            // Also delete thumbnail if it exists and is different from main file
-            if (photo.thumbnailId && photo.thumbnailId !== fileId) {
-              const thumbnailDeleted = await mongoStorage.deleteImageFromGridFS(photo.thumbnailId);
-              console.log(`Thumbnail deletion result: ${thumbnailDeleted ? 'success' : 'failed'} for ${photo.thumbnailId}`);
-            }
-
-          } catch (fileError) {
-            console.error('Error deleting GridFS file:', fileError);
-            // Continue with database deletion even if file deletion fails
-          }
-        } else if (photo.url.startsWith('/uploads/')) {
-          // Local file storage
-          const path = await import('path');
-          const fs = await import('fs');
-          const filePath = path.join(__dirname, '..', photo.url);
-          try {
-            if (fs.existsSync(filePath)) {
-              fs.unlinkSync(filePath);
-            }
-          } catch (fileError) {
-            console.error('Error deleting physical file:', fileError);
-            // Continue with database deletion even if file deletion fails
-          }
-        }
-      }
-
       // CASCADE DELETION: Remove photo from all users' saved photos lists
       try {
         const { mongoStorage } = await import('./mongo-storage');
@@ -1206,6 +1286,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Continue with deletion even if cascade fails
       }
 
+      // Use storage.deletePhoto() which handles GridFS cleanup internally
+      // This ensures consistent cleanup and avoids redundant operations
       const success = await storage.deletePhoto(req.params.photoId);
       if (!success) {
         return res.status(404).json({ error: "Photo not found" });

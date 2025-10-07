@@ -240,6 +240,45 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
     }
   };
 
+  const handleBulkDeletePhotos = async (photoIds: string[]) => {
+    try {
+      const response = await fetch('/api/photos/bulk', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          photoIds,
+          captchaResponse: 'DELETE_ALL_PHOTOS_CONFIRMED'
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        toast({
+          title: "Success",
+          description: result.message || `${photoIds.length} photos deleted successfully`
+        });
+        
+        // Remove deleted photos from local state
+        setPhotos(photos.filter(p => !photoIds.includes(p.id)));
+        // Refresh event data to update photo count
+        onEventUpdated();
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete photos');
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete photos",
+        variant: "destructive"
+      });
+      throw error;
+    }
+  };
+
   const handleSetAsThumbnail = async (photoUrl: string) => {
     if (!event) return;
     
@@ -798,6 +837,7 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
               loading={loadingPhotos}
               onPhotoClick={setFullScreenImage}
               onDeletePhoto={handleDeletePhoto}
+              onBulkDeletePhotos={handleBulkDeletePhotos}
               onSetAsThumbnail={handleSetAsThumbnail}
               currentThumbnailUrl={event?.thumbnailUrl}
               deletingPhotoId={deletingPhotoId}

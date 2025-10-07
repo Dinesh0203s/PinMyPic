@@ -1,15 +1,17 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Download, Eye, Loader2, Image as ImageIcon, Camera, Trash2 } from 'lucide-react';
+import { Download, Eye, Loader2, Image as ImageIcon, Camera, Trash2, Check, Square, Trash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Photo } from '@shared/types';
 import { getDisplayImageUrl, getDownloadImageUrl } from '@/utils/imagePreloader';
 import { DeleteConfirmation } from '@/components/ui/confirmation-alert';
+import { CaptchaVerification } from '@/components/CaptchaVerification';
 
 interface AdminPhotoGalleryProps {
   photos: Photo[];
   loading?: boolean;
   onPhotoClick?: (photo: Photo) => void;
   onDeletePhoto?: (photoId: string) => void;
+  onBulkDeletePhotos?: (photoIds: string[]) => Promise<void>;
   onSetAsThumbnail?: (photoUrl: string) => void;
   currentThumbnailUrl?: string;
   deletingPhotoId?: string | null;
@@ -27,6 +29,7 @@ const AdminPhotoGallery = ({
   loading = false, 
   onPhotoClick, 
   onDeletePhoto,
+  onBulkDeletePhotos,
   onSetAsThumbnail,
   currentThumbnailUrl,
   deletingPhotoId,
@@ -35,6 +38,10 @@ const AdminPhotoGallery = ({
 }: AdminPhotoGalleryProps) => {
   const [loadedPhotos, setLoadedPhotos] = useState<PhotoWithLoading[]>([]);
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 20 });
+  const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set());
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [showCaptchaDialog, setShowCaptchaDialog] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
 
@@ -118,6 +125,79 @@ const AdminPhotoGallery = ({
     );
   };
 
+  const handlePhotoSelect = (photoId: string) => {
+    if (!isMultiSelectMode) return;
+    
+    setSelectedPhotos(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(photoId)) {
+        newSet.delete(photoId);
+      } else {
+        newSet.add(photoId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedPhotos.size === visiblePhotos.length) {
+      setSelectedPhotos(new Set());
+    } else {
+      setSelectedPhotos(new Set(visiblePhotos.map(photo => photo.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedPhotos.size === 0) return;
+    setShowCaptchaDialog(true);
+  };
+
+  const handleCaptchaVerify = async (captchaResponse: string) => {
+    if (!onBulkDeletePhotos || selectedPhotos.size === 0) return;
+    
+    // Validate photo IDs before sending
+    const photoIds = Array.from(selectedPhotos);
+    const invalidIds = photoIds.filter(id => !id || typeof id !== 'string' || id.trim() === '');
+    
+    if (invalidIds.length > 0) {
+      console.error('Invalid photo IDs found:', invalidIds);
+      return;
+    }
+    
+    // Check if all selected photos exist in the current photos array
+    const existingPhotoIds = photos.map(p => p.id);
+    const nonExistentIds = photoIds.filter(id => !existingPhotoIds.includes(id));
+    
+    if (nonExistentIds.length > 0) {
+      console.error('Some selected photos no longer exist:', nonExistentIds);
+      // Remove non-existent photos from selection
+      setSelectedPhotos(prev => {
+        const newSet = new Set(prev);
+        nonExistentIds.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+      return;
+    }
+    
+    setIsBulkDeleting(true);
+    setShowCaptchaDialog(false);
+    
+    try {
+      await onBulkDeletePhotos(photoIds);
+      setSelectedPhotos(new Set());
+      setIsMultiSelectMode(false);
+    } catch (error) {
+      console.error('Bulk delete failed:', error);
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  const exitMultiSelectMode = () => {
+    setIsMultiSelectMode(false);
+    setSelectedPhotos(new Set());
+  };
+
   const visiblePhotos = useMemo(() => {
     if (!Array.isArray(loadedPhotos)) {
       return [];
@@ -145,41 +225,122 @@ const AdminPhotoGallery = ({
   }
 
   return (
-    <div 
-      ref={containerRef}
-      className={`max-h-[60vh] overflow-y-auto ${className}`}
-    >
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-1">
-        {visiblePhotos.map((photo) => (
-          <AdminPhotoCard
-            key={photo.id}
-            photo={photo}
-            onLoad={() => handleImageLoad(photo.id)}
-            onError={() => handleImageError(photo.id)}
-            onPhotoClick={onPhotoClick}
-            onDeletePhoto={onDeletePhoto}
-            onSetAsThumbnail={onSetAsThumbnail}
-            currentThumbnailUrl={currentThumbnailUrl}
-            deletingPhotoId={deletingPhotoId}
-            uploadingThumbnail={uploadingThumbnail}
-            observer={observerRef.current}
-          />
-        ))}
-      </div>
-      
-      {/* Loading more indicator */}
-      {Array.isArray(photos) && visibleRange.end < photos.length && (
-        <div className="flex justify-center py-6">
-          <Loader2 className="h-6 w-6 animate-spin text-pink-500" />
-          <span className="ml-2 text-gray-600">Loading more photos...</span>
+    <>
+      {/* Bulk Operations Toolbar */}
+      {isMultiSelectMode && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium text-blue-800">
+                {selectedPhotos.size} photo{selectedPhotos.size !== 1 ? 's' : ''} selected
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSelectAll}
+                className="text-blue-600 border-blue-300 hover:bg-blue-100"
+              >
+                {selectedPhotos.size === visiblePhotos.length ? 'Deselect All' : 'Select All'}
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleBulkDelete}
+                disabled={selectedPhotos.size === 0 || isBulkDeleting}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {isBulkDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash className="h-4 w-4 mr-2" />
+                    Delete Selected ({selectedPhotos.size})
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exitMultiSelectMode}
+                disabled={isBulkDeleting}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
         </div>
       )}
-      
-      {/* Photos counter */}
-      <div className="text-center py-4 text-sm text-gray-500">
-        Showing {visibleRange.end} of {Array.isArray(photos) ? photos.length : 0} photos
+
+      {/* Multi-select toggle */}
+      {!isMultiSelectMode && Array.isArray(photos) && photos.length > 0 && (
+        <div className="flex justify-end mb-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsMultiSelectMode(true)}
+            className="text-blue-600 border-blue-300 hover:bg-blue-50"
+          >
+            <Square className="h-4 w-4 mr-2" />
+            Select Multiple
+          </Button>
+        </div>
+      )}
+
+      <div 
+        ref={containerRef}
+        className={`max-h-[60vh] overflow-y-auto ${className}`}
+      >
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-1">
+          {visiblePhotos.map((photo) => (
+            <AdminPhotoCard
+              key={photo.id}
+              photo={photo}
+              onLoad={() => handleImageLoad(photo.id)}
+              onError={() => handleImageError(photo.id)}
+              onPhotoClick={onPhotoClick}
+              onDeletePhoto={onDeletePhoto}
+              onSetAsThumbnail={onSetAsThumbnail}
+              currentThumbnailUrl={currentThumbnailUrl}
+              deletingPhotoId={deletingPhotoId}
+              uploadingThumbnail={uploadingThumbnail}
+              observer={observerRef.current}
+              isMultiSelectMode={isMultiSelectMode}
+              isSelected={selectedPhotos.has(photo.id)}
+              onSelect={() => handlePhotoSelect(photo.id)}
+            />
+          ))}
+        </div>
+        
+        {/* Loading more indicator */}
+        {Array.isArray(photos) && visibleRange.end < photos.length && (
+          <div className="flex justify-center py-6">
+            <Loader2 className="h-6 w-6 animate-spin text-pink-500" />
+            <span className="ml-2 text-gray-600">Loading more photos...</span>
+          </div>
+        )}
+        
+        {/* Photos counter */}
+        <div className="text-center py-4 text-sm text-gray-500">
+          Showing {visibleRange.end} of {Array.isArray(photos) ? photos.length : 0} photos
+        </div>
       </div>
-    </div>
+
+      {/* Captcha Verification Dialog */}
+      <CaptchaVerification
+        isOpen={showCaptchaDialog}
+        onClose={() => setShowCaptchaDialog(false)}
+        onVerify={handleCaptchaVerify}
+        title="Delete All Selected Photos"
+        description={`You are about to permanently delete ${selectedPhotos.size} photos. This action cannot be undone.`}
+        actionText={`DELETE ${selectedPhotos.size} PHOTOS`}
+        loading={isBulkDeleting}
+      />
+    </>
   );
 };
 
@@ -194,6 +355,9 @@ interface AdminPhotoCardProps {
   deletingPhotoId?: string | null;
   uploadingThumbnail?: boolean;
   observer: IntersectionObserver | null;
+  isMultiSelectMode?: boolean;
+  isSelected?: boolean;
+  onSelect?: () => void;
 }
 
 const AdminPhotoCard = ({ 
@@ -206,7 +370,10 @@ const AdminPhotoCard = ({
   currentThumbnailUrl,
   deletingPhotoId,
   uploadingThumbnail,
-  observer 
+  observer,
+  isMultiSelectMode = false,
+  isSelected = false,
+  onSelect
 }: AdminPhotoCardProps) => {
   const cardRef = useRef<HTMLDivElement>(null);
   const isThumbnail = currentThumbnailUrl === photo.url;
@@ -243,14 +410,25 @@ const AdminPhotoCard = ({
     }
   };
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (isMultiSelectMode) {
+      e.stopPropagation();
+      onSelect?.();
+    } else {
+      onPhotoClick?.(photo);
+    }
+  };
+
   return (
     <div
       ref={cardRef}
       data-photo-id={photo.id}
       className={`aspect-square relative group overflow-hidden rounded-lg border bg-gray-100 cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-lg ${
         isThumbnail ? 'ring-2 ring-green-500' : ''
+      } ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50' : ''} ${
+        isMultiSelectMode ? 'cursor-pointer' : ''
       }`}
-      onClick={() => onPhotoClick?.(photo)}
+      onClick={handleCardClick}
     >
       {/* Error state */}
       {photo.error && (
@@ -259,9 +437,22 @@ const AdminPhotoCard = ({
         </div>
       )}
       
+      {/* Selection checkbox */}
+      {isMultiSelectMode && (
+        <div className="absolute top-2 left-2 z-20">
+          <div className={`w-6 h-6 rounded border-2 flex items-center justify-center ${
+            isSelected 
+              ? 'bg-blue-500 border-blue-500 text-white' 
+              : 'bg-white border-gray-300 hover:border-blue-400'
+          }`}>
+            {isSelected && <Check className="h-4 w-4" />}
+          </div>
+        </div>
+      )}
+
       {/* Thumbnail badge */}
       {isThumbnail && (
-        <div className="absolute top-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full z-10">
+        <div className={`absolute top-2 ${isMultiSelectMode ? 'right-2' : 'left-2'} bg-green-500 text-white text-xs px-2 py-1 rounded-full z-10`}>
           Thumbnail
         </div>
       )}
@@ -282,10 +473,11 @@ const AdminPhotoCard = ({
       </div>
       
       {/* Hover overlay with admin actions */}
-      <div 
-        className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100"
-        onClick={(e) => e.stopPropagation()}
-      >
+      {!isMultiSelectMode && (
+        <div 
+          className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100"
+          onClick={(e) => e.stopPropagation()}
+        >
         <div className="flex flex-wrap gap-2 p-2" onClick={(e) => e.stopPropagation()}>
           <Button
             variant="secondary"
@@ -344,7 +536,8 @@ const AdminPhotoCard = ({
             }
           />
         </div>
-      </div>
+        </div>
+      )}
       
       {/* Loading indicator for individual photos */}
       {!photo.loaded && !photo.error && (

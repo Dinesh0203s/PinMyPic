@@ -17,6 +17,7 @@ import {
   type InsertQRCode
 } from "@shared/types";
 import { IStorage } from './storage';
+import { isValidObjectId } from './utils/objectIdValidation';
 
 export class MongoDBStorage implements IStorage {
   private async ensureConnection() {
@@ -729,6 +730,12 @@ export class MongoDBStorage implements IStorage {
   // Photo methods
   async getPhoto(id: string): Promise<Photo | undefined> {
     try {
+      // Validate ObjectId format before attempting to create ObjectId
+      if (!isValidObjectId(id)) {
+        console.error('Invalid photo ID format:', id);
+        return undefined;
+      }
+
       const collection = await this.getCollection('photos');
       const photo = await collection.findOne({ _id: new ObjectId(id) });
       if (photo) {

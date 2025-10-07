@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { UploadOptimizer, MemoryMonitor } from '@/utils/uploadOptimizer';
 import { uploadQueueManager, DynamicUploadStats } from '@/utils/dynamicUploadProcessor';
 import { imageCompressor } from '@/utils/imageCompression';
+import { CompressionUploadQueue, type CompressionQueueItem, type CompressionQueueStats } from '@/utils/compressionUploadQueue';
 
 interface PhotoUploadDialogProps {
   eventId: string;
@@ -49,6 +50,12 @@ export function PhotoUploadDialog({
   const [dynamicStats, setDynamicStats] = useState<DynamicUploadStats | null>(null);
   const [compressionQuality, setCompressionQuality] = useState<number>(1.0);
   const [showCompressionSettings, setShowCompressionSettings] = useState(false);
+  
+  // Compression queue state
+  const [compressionQueue, setCompressionQueue] = useState<CompressionUploadQueue | null>(null);
+  const [queueItems, setQueueItems] = useState<CompressionQueueItem[]>([]);
+  const [queueStats, setQueueStats] = useState<CompressionQueueStats | null>(null);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -300,11 +307,11 @@ export function PhotoUploadDialog({
       });
     }
 
-    // Apply compression if enabled - process individually for immediate upload
+    // Apply compression if enabled - use queue-based processing
     if (eventCompressionSetting) {
       toast({
-        title: "Starting compression and auto-upload",
-        description: `Processing ${imageFiles.length} images individually and uploading automatically...`,
+        title: "Starting compression queue",
+        description: `Adding ${imageFiles.length} images to compression queue for sequential processing...`,
       });
 
       // Set uploading state to true for auto-upload
@@ -315,126 +322,75 @@ export function PhotoUploadDialog({
         await requestWakeLock();
       }
 
-      // Process each image individually, compress, and upload immediately
-      for (let i = 0; i < imageFiles.length; i++) {
-        const file = imageFiles[i];
-        
-        try {
-          // Compress individual image
-          const compressionResult = await imageCompressor.compressImage(file, {
-            quality: compressionQuality,
-            maxWidth: 1920,
-            maxHeight: 1080,
-            format: imageCompressor.isWebPSupported() ? 'webp' : 'jpeg'
-          });
-
-          // Create upload file with compressed image
-          const uploadFile: UploadFile = {
-            file: compressionResult.compressedFile,
-            id: `${Date.now()}-${Math.random()}`,
-            progress: 0,
-            status: 'pending'
-          };
-
-          // Add to upload queue immediately
-          updateUploadFiles(prev => [...prev, uploadFile]);
-
-          // Show compression progress
-          const compressionRatio = compressionResult.compressionRatio;
-          const originalSizeMB = Math.round(compressionResult.originalSize / 1024 / 1024 * 100) / 100;
-          const compressedSizeMB = Math.round(compressionResult.compressedSize / 1024 / 1024 * 100) / 100;
-          
-          toast({
-            title: `Image ${i + 1}/${imageFiles.length} compressed`,
-            description: `${compressionRatio}% smaller (${originalSizeMB}MB → ${compressedSizeMB}MB) at ${Math.round(compressionQuality * 100)}% quality - Auto-uploading...`,
-          });
-
-          // Auto-upload the compressed image immediately
-          try {
-            await uploadPhoto(uploadFile);
-            
-            toast({
-              title: `Image ${i + 1}/${imageFiles.length} uploaded`,
-              description: `${file.name} uploaded successfully`,
-            });
-          } catch (uploadError) {
-            console.error(`Auto-upload failed for ${file.name}:`, uploadError);
-            
-            // Update status to error
-            updateUploadFiles(prev => prev.map(f => 
-              f.id === uploadFile.id ? { 
-                ...f, 
-                status: 'error' as const, 
-                error: uploadError instanceof Error ? uploadError.message : 'Auto-upload failed'
-              } : f
-            ));
-            
-            toast({
-              title: `Upload failed for ${file.name}`,
-              description: "Auto-upload failed, you can retry manually",
-              variant: "destructive"
-            });
-          }
-
-        } catch (error) {
-          console.error(`Compression failed for ${file.name}:`, error);
-          
-          // Fallback to original file if compression fails
+      // Create compression queue
+      const queue = new CompressionUploadQueue(
+        async (file: File) => {
+          // Upload function for the queue
           const uploadFile: UploadFile = {
             file: file,
             id: `${Date.now()}-${Math.random()}`,
             progress: 0,
             status: 'pending'
           };
-
-          updateUploadFiles(prev => [...prev, uploadFile]);
           
-          toast({
-            title: `Compression failed for ${file.name}`,
-            description: "Using original image instead - Auto-uploading...",
-            variant: "destructive"
+          updateUploadFiles(prev => [...prev, uploadFile]);
+          await uploadPhoto(uploadFile);
+        },
+        {
+          quality: compressionQuality,
+          maxWidth: 1920,
+          maxHeight: 1080,
+          format: imageCompressor.isWebPSupported() ? 'webp' : 'jpeg'
+        },
+        (stats: CompressionQueueStats) => {
+          setQueueStats(stats);
+        },
+        (item: CompressionQueueItem) => {
+          setQueueItems(prev => {
+            const index = prev.findIndex(i => i.id === item.id);
+            if (index >= 0) {
+              const updated = [...prev];
+              updated[index] = item;
+              return updated;
+            } else {
+              return [...prev, item];
+            }
           });
-
-          // Try to auto-upload the original file
-          try {
-            await uploadPhoto(uploadFile);
-          } catch (uploadError) {
-            console.error(`Auto-upload failed for original ${file.name}:`, uploadError);
-            
-            updateUploadFiles(prev => prev.map(f => 
-              f.id === uploadFile.id ? { 
-                ...f, 
-                status: 'error' as const, 
-                error: uploadError instanceof Error ? uploadError.message : 'Auto-upload failed'
-              } : f
-            ));
-          }
         }
-      }
+      );
 
-      // Show final auto-upload summary
-      const finalErrorCount = uploadFiles.filter(f => f.status === 'error').length;
-      const finalSuccessCount = uploadFiles.filter(f => f.status === 'completed').length;
+      setCompressionQueue(queue);
 
-      if (finalSuccessCount > 0) {
+      // Add files to queue
+      const newItems = queue.addFiles(imageFiles);
+      setQueueItems(newItems);
+
+      // Start processing the queue
+      try {
+        await queue.startProcessing();
+        
         toast({
-          title: "Auto-upload complete",
-          description: `${finalSuccessCount} photos uploaded automatically to ${eventTitle}`,
+          title: "Compression queue completed",
+          description: `All ${imageFiles.length} images processed and uploaded successfully`,
         });
-        onPhotosUploaded();
-      }
-
-      if (finalErrorCount > 0) {
+      } catch (error) {
+        console.error('Compression queue error:', error);
         toast({
-          title: "Some auto-uploads failed",
-          description: `${finalErrorCount} photos failed to upload automatically`,
+          title: "Compression queue error",
+          description: "Some images may not have been processed correctly",
           variant: "destructive"
         });
+      } finally {
+        // Reset uploading state and release wake lock
+        setIsUploading(false);
+        setCompressionQueue(null);
+        setQueueItems([]);
+        setQueueStats(null);
+        await releaseWakeLock();
+        
+        // Refresh photos after all uploads
+        onPhotosUploaded();
       }
-
-      // Reset uploading state and release wake lock
-      setIsUploading(false);
-      await releaseWakeLock();
 
     } else {
       // No compression - add all files to upload queue at once
@@ -923,6 +879,35 @@ export function PhotoUploadDialog({
                           {dynamicStats.pending} pending
                         </div>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Compression Queue Stats */}
+                  {queueStats && (
+                    <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-4">
+                          <span className="text-green-700 font-medium">
+                            Compression Queue: {queueStats.completed}/{queueStats.total}
+                          </span>
+                          <span className="text-green-600">
+                            {queueStats.compressing} compressing
+                          </span>
+                          <span className="text-green-600">
+                            {queueStats.uploading} uploading
+                          </span>
+                        </div>
+                        <div className="text-xs text-green-500">
+                          {queueStats.pending} pending
+                        </div>
+                      </div>
+                      {queueStats.currentItem && (
+                        <div className="mt-2 text-xs text-green-600">
+                          Processing: {queueStats.currentItem.originalFile.name}
+                          {queueStats.currentItem.status === 'compressing' && ' (compressing...)'}
+                          {queueStats.currentItem.status === 'uploading' && ' (uploading...)'}
+                        </div>
+                      )}
                     </div>
                   )}
 

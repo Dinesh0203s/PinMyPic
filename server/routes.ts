@@ -657,6 +657,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/events/:id", authenticateUser, requirePermission('events'), async (req: AuthenticatedRequest, res) => {
+    try {
+      const eventId = req.params.id;
+      const updateData = req.body;
+      
+      // Validate that the event exists
+      const existingEvent = await storage.getEvent(eventId);
+      if (!existingEvent) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      
+      // Update the event
+      const updatedEvent = await storage.updateEvent(eventId, updateData);
+      
+      if (updatedEvent) {
+        res.json({ 
+          success: true, 
+          event: updatedEvent,
+          message: "Event updated successfully" 
+        });
+      } else {
+        res.status(500).json({ error: "Failed to update event" });
+      }
+    } catch (error) {
+      console.error("Error updating event:", error);
+      res.status(500).json({ error: "Failed to update event" });
+    }
+  });
+
   app.delete("/api/events/:id", authenticateUser, requirePermission('events'), async (req: AuthenticatedRequest, res) => {
     try {
       const success = await storage.deleteEvent(req.params.id);

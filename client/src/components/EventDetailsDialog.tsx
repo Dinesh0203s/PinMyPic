@@ -31,11 +31,13 @@ import {
   Users
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { Event, Photo } from '@shared/types';
 import { PhotoUploadDialog } from './PhotoUploadDialog';
 import AdminPhotoGallery from './AdminPhotoGallery';
 import { DeleteConfirmation } from '@/components/ui/confirmation-alert';
 import { EventShareDialog } from './EventShareDialog';
+import { ThumbnailEditor } from './ThumbnailEditor';
 
 interface EventDetailsDialogProps {
   event: Event | null;
@@ -48,6 +50,9 @@ interface EventDetailsDialogProps {
 export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, initialEditMode = false }: EventDetailsDialogProps) {
   const [activeTab, setActiveTab] = useState('details');
   const [isEditing, setIsEditing] = useState(false);
+  const [showThumbnailEditor, setShowThumbnailEditor] = useState(false);
+  const [thumbnailEditImage, setThumbnailEditImage] = useState<string>('');
+  const { currentUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loadingPhotos, setLoadingPhotos] = useState(false);
@@ -416,6 +421,82 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
     }
   };
 
+  const handleEditThumbnail = (photoUrl: string) => {
+    if (!photoUrl) {
+      toast({
+        title: "Error",
+        description: "No image URL provided",
+        variant: "destructive"
+      });
+      return;
+    }
+    setThumbnailEditImage(photoUrl);
+    setShowThumbnailEditor(true);
+  };
+
+  const handleSaveEditedThumbnail = async (editedImageDataUrl: string) => {
+    if (!event) return;
+    
+    setUploadingThumbnail(true);
+    try {
+      // Convert data URL to blob
+      const response = await fetch(editedImageDataUrl);
+      const blob = await response.blob();
+      
+      // Create FormData for upload
+      const formData = new FormData();
+      formData.append('photos', blob, 'edited-thumbnail.jpg');
+      formData.append('eventId', event.id);
+      
+      // Upload the edited thumbnail
+      const uploadResponse = await fetch('/api/photos/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (uploadResponse.ok) {
+        const result = await uploadResponse.json();
+        
+        // Get authentication token
+        const token = await currentUser?.getIdToken();
+        
+        // Update event with new thumbnail
+        const updateResponse = await fetch(`/api/events/${event.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            thumbnailUrl: result.photo.url
+          }),
+        });
+        
+        if (updateResponse.ok) {
+          toast({
+            title: "Success",
+            description: "Thumbnail updated successfully",
+          });
+          onEventUpdated();
+          setShowThumbnailEditor(false);
+        } else {
+          throw new Error('Failed to update event thumbnail');
+        }
+      } else {
+        throw new Error('Failed to upload edited thumbnail');
+      }
+    } catch (error) {
+      console.error('Error saving edited thumbnail:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save edited thumbnail",
+        variant: "destructive"
+      });
+    } finally {
+      setUploadingThumbnail(false);
+    }
+  };
+
   const handleCancel = () => {
     if (event) {
       setEditData({
@@ -461,7 +542,7 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="details" className="flex items-center gap-2">
               <Edit className="h-4 w-4" />
               Event Details
@@ -469,6 +550,10 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
             <TabsTrigger value="gallery" className="flex items-center gap-2">
               <Camera className="h-4 w-4" />
               Photo Gallery ({event.photoCount})
+            </TabsTrigger>
+            <TabsTrigger value="thumbnail" className="flex items-center gap-2">
+              <ImageIcon className="h-4 w-4" />
+              Edit Thumbnail
             </TabsTrigger>
           </TabsList>
 
@@ -839,10 +924,69 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
               onDeletePhoto={handleDeletePhoto}
               onBulkDeletePhotos={handleBulkDeletePhotos}
               onSetAsThumbnail={handleSetAsThumbnail}
+              onEditThumbnail={handleEditThumbnail}
               currentThumbnailUrl={event?.thumbnailUrl}
               deletingPhotoId={deletingPhotoId}
               uploadingThumbnail={uploadingThumbnail}
             />
+          </TabsContent>
+
+          <TabsContent value="thumbnail" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <ImageIcon className="h-5 w-5" />
+                Edit Thumbnail
+              </h3>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Current Thumbnail Display */}
+              {event.thumbnailUrl ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-32 h-32 border border-gray-300 rounded-lg overflow-hidden">
+                      <img
+                        src={event.thumbnailUrl}
+                        alt="Current thumbnail"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-medium mb-2">Current Thumbnail</h4>
+                      <p className="text-sm text-gray-600 mb-3">
+                        This is the current thumbnail for this event. Click "Edit Thumbnail" to modify it.
+                      </p>
+                      <Button
+                        onClick={() => handleEditThumbnail(event.thumbnailUrl!)}
+                        className="flex items-center gap-2"
+                        disabled={uploadingThumbnail}
+                      >
+                        <Edit className="h-4 w-4" />
+                        Edit Thumbnail
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <ImageIcon className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                  <p className="text-lg font-medium mb-2">No Thumbnail Set</p>
+                  <p className="text-sm mb-4">
+                    This event doesn't have a thumbnail yet. Upload photos and set one as thumbnail, or upload a thumbnail directly.
+                  </p>
+                  <div className="flex gap-2 justify-center">
+                    <Button
+                      onClick={() => setActiveTab('gallery')}
+                      variant="outline"
+                      className="flex items-center gap-2"
+                    >
+                      <Camera className="h-4 w-4" />
+                      Go to Gallery
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       </DialogContent>
@@ -999,10 +1143,18 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
       )}
 
       {/* Event Share Dialog */}
-      <EventShareDialog 
+      <EventShareDialog
         open={shareDialogOpen}
         onOpenChange={setShareDialogOpen}
         event={event}
+      />
+
+      {/* Thumbnail Editor */}
+      <ThumbnailEditor
+        imageUrl={thumbnailEditImage}
+        open={showThumbnailEditor}
+        onOpenChange={setShowThumbnailEditor}
+        onSave={handleSaveEditedThumbnail}
       />
     </Dialog>
   );

@@ -244,3 +244,4 @@ export class CompressionUploadQueue {
     return this.queue.filter(item => item.status === status);
   }
 }
+

@@ -307,6 +307,7 @@ const SavedPhotos = () => {
               savedPhotoIds={photos.map(p => p.id)} // All photos are saved in this context
               onSavePhoto={() => {}} // No save functionality needed here
               onRemovePhoto={handleRemovePhoto}
+              enableSelection={true}
             />
           </div>
         )}

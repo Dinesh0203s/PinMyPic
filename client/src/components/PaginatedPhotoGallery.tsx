@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, ChevronLeft, ChevronRight, ImageIcon } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Loader2, ChevronLeft, ChevronRight, ImageIcon, Download, CheckSquare, Square } from 'lucide-react';
 import ProgressiveImage from './ProgressiveImage';
 import { Photo } from '@shared/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { getDownloadImageUrl } from '@/utils/imagePreloader';
 
 // Hook to get responsive photos per page
 const useResponsivePhotosPerPage = () => {
@@ -57,6 +60,7 @@ interface PaginatedPhotoGalleryProps {
   onRemovePhoto?: (photoId: string) => void;
   savingPhotoIds?: string[];
   photosPerPage?: number;
+  enableSelection?: boolean;
 }
 
 const PaginatedPhotoGallery: React.FC<PaginatedPhotoGalleryProps> = ({
@@ -69,12 +73,16 @@ const PaginatedPhotoGallery: React.FC<PaginatedPhotoGalleryProps> = ({
   onSavePhoto,
   onRemovePhoto,
   savingPhotoIds = [],
-  photosPerPage: propPhotosPerPage
+  photosPerPage: propPhotosPerPage,
+  enableSelection = false
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [loadedPhotos, setLoadedPhotos] = useState<Set<string>>(new Set());
   const [errorPhotos, setErrorPhotos] = useState<Set<string>>(new Set());
+  const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
   const { currentUser } = useAuth();
+  const { toast } = useToast();
   
   // Use responsive photos per page, but allow override via props
   const responsivePhotosPerPage = useResponsivePhotosPerPage();
@@ -114,6 +122,168 @@ const PaginatedPhotoGallery: React.FC<PaginatedPhotoGalleryProps> = ({
   useEffect(() => {
     setRevealedPhotos(new Set(currentPhotos.map(photo => photo.id)));
   }, [currentPhotos]);
+
+  // Selection handlers
+  const togglePhotoSelection = useCallback((photoId: string) => {
+    setSelectedPhotos(prev => {
+      const newSelection = new Set(prev);
+      if (newSelection.has(photoId)) {
+        newSelection.delete(photoId);
+      } else {
+        newSelection.add(photoId);
+      }
+      return newSelection;
+    });
+  }, []);
+
+  const selectAllCurrentPage = useCallback(() => {
+    const currentPagePhotoIds = currentPhotos.map(photo => photo.id);
+    setSelectedPhotos(prev => {
+      const newSelection = new Set(prev);
+      currentPagePhotoIds.forEach(id => newSelection.add(id));
+      return newSelection;
+    });
+  }, [currentPhotos]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedPhotos(new Set());
+    setIsSelectionMode(false);
+  }, []);
+
+  const toggleSelectionMode = useCallback(() => {
+    setIsSelectionMode(prev => {
+      if (prev) {
+        clearSelection();
+      }
+      return !prev;
+    });
+  }, [clearSelection]);
+
+  // Download handlers
+  const downloadSelectedPhotos = useCallback(async () => {
+    if (selectedPhotos.size === 0) {
+      console.log('No photos selected');
+      return;
+    }
+
+    const selectedPhotoList = photos.filter(photo => selectedPhotos.has(photo.id));
+    console.log('Selected photos for download:', selectedPhotoList.length, selectedPhotoList);
+    
+    toast({
+      title: "Preparing Download",
+      description: `Preparing ${selectedPhotoList.length} photos for download...`
+    });
+
+    try {
+      // Create ZIP file directly
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+      
+      let successCount = 0;
+      let errorCount = 0;
+
+      // Download photos in batches to avoid overwhelming the server
+      const BATCH_SIZE = 5;
+      const batches = [];
+      for (let i = 0; i < selectedPhotoList.length; i += BATCH_SIZE) {
+        batches.push(selectedPhotoList.slice(i, i + BATCH_SIZE));
+      }
+
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex];
+        
+        const batchPromises = batch.map(async (photo, index) => {
+          try {
+            const downloadUrl = getDownloadImageUrl(photo.url);
+            console.log(`Downloading photo ${index + 1} in batch ${batchIndex + 1}:`, photo.filename, downloadUrl);
+            
+            const response = await fetch(downloadUrl);
+            
+            if (!response.ok) {
+              throw new Error(`Failed to fetch ${photo.filename}: ${response.status} ${response.statusText}`);
+            }
+            
+            const blob = await response.blob();
+            const filename = photo.filename || `photo_${batchIndex * BATCH_SIZE + index + 1}.jpg`;
+            
+            console.log(`Successfully downloaded: ${filename}, size: ${blob.size} bytes`);
+            
+            // Add to zip
+            zip.file(filename, blob);
+            successCount++;
+            
+            return true;
+          } catch (error) {
+            console.error(`Error downloading photo ${photo.filename}:`, error);
+            errorCount++;
+            return false;
+          }
+        });
+
+        // Wait for current batch to complete
+        await Promise.all(batchPromises);
+        
+        // Update progress
+        const processedCount = (batchIndex + 1) * BATCH_SIZE;
+        const totalProcessed = Math.min(processedCount, selectedPhotoList.length);
+        
+        toast({
+          title: "Downloading Photos",
+          description: `Downloaded ${totalProcessed} of ${selectedPhotoList.length} photos...`
+        });
+        
+        // Small delay between batches
+        if (batchIndex < batches.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+
+      if (successCount === 0) {
+        throw new Error('Failed to download any photos');
+      }
+
+      // Generate and download zip file
+      toast({
+        title: "Creating ZIP File",
+        description: "Compressing photos into ZIP file..."
+      });
+
+      console.log(`Creating ZIP with ${successCount} photos`);
+      const zipBlob = await zip.generateAsync({ 
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 }
+      });
+
+      console.log(`ZIP created, size: ${zipBlob.size} bytes`);
+
+      // Download ZIP
+      const filename = `selected-photos-${new Date().toISOString().split('T')[0]}.zip`;
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      console.log(`Triggering download: ${filename}`);
+      a.click();
+      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "Download Complete",
+        description: `${successCount} photos downloaded successfully${errorCount > 0 ? ` (${errorCount} failed)` : ''}`
+      });
+
+      clearSelection();
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: "Download Failed",
+        description: error instanceof Error ? error.message : "An error occurred during download",
+        variant: "destructive"
+      });
+    }
+  }, [selectedPhotos, photos, toast, clearSelection]);
 
 
   const scrollToTop = () => {
@@ -179,6 +349,63 @@ const PaginatedPhotoGallery: React.FC<PaginatedPhotoGalleryProps> = ({
 
   return (
     <div className={`${className}`} data-gallery-container>
+      {/* Selection Controls */}
+      {enableSelection && (
+        <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Button
+                variant={isSelectionMode ? "default" : "outline"}
+                size="sm"
+                onClick={toggleSelectionMode}
+                className="flex items-center gap-2"
+              >
+                {isSelectionMode ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                {isSelectionMode ? "Exit Selection" : "Select Photos"}
+              </Button>
+              
+              {isSelectionMode && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={selectAllCurrentPage}
+                    className="flex items-center gap-2"
+                  >
+                    <CheckSquare className="h-4 w-4" />
+                    Select All on Page
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={clearSelection}
+                    className="flex items-center gap-2"
+                  >
+                    Clear Selection
+                  </Button>
+                </>
+              )}
+            </div>
+            
+            {isSelectionMode && selectedPhotos.size > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {selectedPhotos.size} photo{selectedPhotos.size !== 1 ? 's' : ''} selected
+                </span>
+                <Button
+                  onClick={downloadSelectedPhotos}
+                  className="flex items-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download Selected
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Photo Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4 mb-4 md:mb-6">
         {currentPhotos.map((photo, index) => (
@@ -191,6 +418,9 @@ const PaginatedPhotoGallery: React.FC<PaginatedPhotoGalleryProps> = ({
             loaded={loadedPhotos.has(photo.id)}
             error={errorPhotos.has(photo.id)}
             visible={revealedPhotos.has(photo.id)}
+            isSelectionMode={isSelectionMode}
+            isSelected={selectedPhotos.has(photo.id)}
+            onToggleSelection={() => togglePhotoSelection(photo.id)}
           />
         ))}
       </div>
@@ -312,6 +542,9 @@ interface PhotoCardProps {
   loaded: boolean;
   error: boolean;
   visible: boolean;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelection?: () => void;
 }
 
 const PhotoCard: React.FC<PhotoCardProps> = ({
@@ -321,15 +554,28 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
   onError,
   loaded,
   error,
-  visible
+  visible,
+  isSelectionMode = false,
+  isSelected = false,
+  onToggleSelection
 }) => {
+
+  const handleCardClick = () => {
+    if (isSelectionMode && onToggleSelection) {
+      onToggleSelection();
+    } else {
+      onPhotoClick?.(photo);
+    }
+  };
 
   return (
     <Card 
       className={`group hover:shadow-xl transition-all duration-300 hover:scale-105 overflow-hidden cursor-pointer ${
         visible ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4'
-      } transition-all duration-500`}
-      onClick={() => onPhotoClick?.(photo)}
+      } transition-all duration-500 ${
+        isSelected ? 'ring-2 ring-blue-500 ring-offset-2' : ''
+      }`}
+      onClick={handleCardClick}
     >
       <CardContent className="p-0 aspect-square relative">
         {/* Loading skeleton */}
@@ -365,6 +611,17 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
         {!loaded && !error && (
           <div className="absolute bottom-2 right-2 bg-black/50 rounded-full p-1">
             <Loader2 className="h-3 w-3 animate-spin text-white" />
+          </div>
+        )}
+
+        {/* Selection checkbox overlay */}
+        {isSelectionMode && (
+          <div className="absolute top-2 left-2 z-10">
+            <Checkbox
+              checked={isSelected}
+              onChange={onToggleSelection}
+              className="bg-white/90 border-2 border-white shadow-lg"
+            />
           </div>
         )}
       </CardContent>

@@ -1097,6 +1097,7 @@ const Events = () => {
                 onSavePhoto={handleSavePhoto}
                 onRemovePhoto={handleRemovePhoto}
                 savingPhotoIds={savingPhotoIds}
+                enableSelection={true}
               />
             </div>
           </section>

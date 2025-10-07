@@ -779,6 +779,7 @@ const Profile = () => {
                       showSaveToProfile={false}
                       savedPhotoIds={[]}
                       photosPerPage={10}
+                      enableSelection={true}
                     />
                   )}
                 </CardContent>

@@ -195,7 +195,7 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
+      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Crop className="h-5 w-5" />
@@ -203,7 +203,7 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
           </DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto space-y-4">
           {/* Controls */}
           <div className="flex flex-wrap items-center gap-4 p-4 bg-gray-50 rounded-lg">
             <div className="flex items-center gap-2">
@@ -252,7 +252,7 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
               onMouseLeave={handleMouseUp}
               style={{
                 width: '100%',
-                height: '400px',
+                height: '300px',
                 backgroundImage: `url(${imageUrl})`,
                 backgroundSize: 'contain',
                 backgroundRepeat: 'no-repeat',
@@ -290,28 +290,29 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <Button
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isLoading}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={isLoading}
-              className="flex items-center gap-2"
-            >
-              {isLoading ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              {isLoading ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </div>
+        </div>
+
+        {/* Action Buttons - Fixed at bottom */}
+        <div className="flex justify-end gap-3 pt-4 border-t bg-white">
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isLoading}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={isLoading}
+            className="flex items-center gap-2"
+          >
+            {isLoading ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {isLoading ? 'Saving...' : 'Save Changes'}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

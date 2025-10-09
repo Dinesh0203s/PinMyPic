@@ -42,8 +42,10 @@ const AdminPhotoGallery = ({
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [showCaptchaDialog, setShowCaptchaDialog] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize photos with loading states
   useEffect(() => {
@@ -59,23 +61,42 @@ const AdminPhotoGallery = ({
     if (!containerRef.current) return;
 
     const handleScroll = () => {
-      if (!containerRef.current) return;
+      if (!containerRef.current || isLoadingMore) return;
       
-      const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-      const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
-      
-      // Load more photos when user scrolls to 80% of current content
-      if (scrollPercentage > 0.8 && Array.isArray(photos) && visibleRange.end < photos.length) {
-        setVisibleRange(prev => ({
-          ...prev,
-          end: Math.min(prev.end + 20, photos.length)
-        }));
+      // Clear existing timeout
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
       }
+      
+      // Throttle scroll events
+      scrollTimeoutRef.current = setTimeout(() => {
+        if (!containerRef.current) return;
+        
+        const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+        const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+        
+        // Load more photos when user scrolls to 80% of current content
+        if (scrollPercentage > 0.8 && Array.isArray(photos) && visibleRange.end < photos.length) {
+          setIsLoadingMore(true);
+          setVisibleRange(prev => ({
+            ...prev,
+            end: Math.min(prev.end + 20, photos.length)
+          }));
+          
+          // Reset loading state after a short delay
+          setTimeout(() => setIsLoadingMore(false), 500);
+        }
+      }, 100); // Throttle to 100ms
     };
 
-    containerRef.current.addEventListener('scroll', handleScroll);
-    return () => containerRef.current?.removeEventListener('scroll', handleScroll);
-  }, [Array.isArray(photos) ? photos.length : 0, visibleRange.end]);
+    containerRef.current.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      containerRef.current?.removeEventListener('scroll', handleScroll);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, [Array.isArray(photos) ? photos.length : 0, visibleRange.end, isLoadingMore]);
 
   // Intersection observer for lazy loading
   useEffect(() => {
@@ -140,10 +161,14 @@ const AdminPhotoGallery = ({
   };
 
   const handleSelectAll = () => {
-    if (selectedPhotos.size === visiblePhotos.length) {
+    // Check if all photos in the event are selected (not just visible ones)
+    const allPhotoIds = Array.isArray(photos) ? photos.map(photo => photo.id) : [];
+    const allSelected = allPhotoIds.length > 0 && allPhotoIds.every(id => selectedPhotos.has(id));
+    
+    if (allSelected) {
       setSelectedPhotos(new Set());
     } else {
-      setSelectedPhotos(new Set(visiblePhotos.map(photo => photo.id)));
+      setSelectedPhotos(new Set(allPhotoIds));
     }
   };
 
@@ -198,6 +223,19 @@ const AdminPhotoGallery = ({
     setSelectedPhotos(new Set());
   };
 
+  const handleLoadMore = () => {
+    if (!Array.isArray(photos) || visibleRange.end >= photos.length || isLoadingMore) return;
+    
+    setIsLoadingMore(true);
+    setVisibleRange(prev => ({
+      ...prev,
+      end: Math.min(prev.end + 20, photos.length)
+    }));
+    
+    // Reset loading state after a short delay
+    setTimeout(() => setIsLoadingMore(false), 500);
+  };
+
   const visiblePhotos = useMemo(() => {
     if (!Array.isArray(loadedPhotos)) {
       return [];
@@ -240,7 +278,11 @@ const AdminPhotoGallery = ({
                 onClick={handleSelectAll}
                 className="text-blue-600 border-blue-300 hover:bg-blue-100"
               >
-                {selectedPhotos.size === visiblePhotos.length ? 'Deselect All' : 'Select All'}
+                {(() => {
+                  const allPhotoIds = Array.isArray(photos) ? photos.map(photo => photo.id) : [];
+                  const allSelected = allPhotoIds.length > 0 && allPhotoIds.every(id => selectedPhotos.has(id));
+                  return allSelected ? 'Deselect All' : 'Select All';
+                })()}
               </Button>
             </div>
             <div className="flex items-center gap-2">
@@ -316,11 +358,32 @@ const AdminPhotoGallery = ({
           ))}
         </div>
         
-        {/* Loading more indicator */}
+        {/* Loading more indicator and manual load more button */}
         {Array.isArray(photos) && visibleRange.end < photos.length && (
-          <div className="flex justify-center py-6">
-            <Loader2 className="h-6 w-6 animate-spin text-pink-500" />
-            <span className="ml-2 text-gray-600">Loading more photos...</span>
+          <div className="flex flex-col items-center py-6 space-y-4">
+            {isLoadingMore && (
+              <div className="flex items-center">
+                <Loader2 className="h-6 w-6 animate-spin text-pink-500" />
+                <span className="ml-2 text-gray-600">Loading more photos...</span>
+              </div>
+            )}
+            <Button
+              variant="outline"
+              onClick={handleLoadMore}
+              disabled={isLoadingMore}
+              className="px-6 py-2"
+            >
+              {isLoadingMore ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  Load More Photos ({photos.length - visibleRange.end} remaining)
+                </>
+              )}
+            </Button>
           </div>
         )}
         

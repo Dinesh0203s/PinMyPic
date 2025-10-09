@@ -1135,7 +1135,7 @@ const Events = () => {
     "@type": "ItemList",
     "name": "Photography Events Gallery",
     "description": "Browse professional photography events with AI-powered face recognition. Wedding, corporate, and party photography in Coimbatore, Tamil Nadu.",
-    "url": "https://pinmypic.com/events",
+    "url": "https://pinmypic.online/events",
     "numberOfItems": totalEvents,
     "itemListElement": events.slice(0, 10).map((event, index) => ({
       "@type": "Event",
@@ -1153,12 +1153,12 @@ const Events = () => {
           "addressCountry": "IN"
         }
       },
-      "organizer": {
-        "@type": "Organization",
-        "name": "PinMyPic",
-        "url": "https://pinmypic.com"
-      },
-      "image": (event as any).coverImage || "https://pinmypic.com/logo.png"
+        "organizer": {
+          "@type": "Organization",
+          "name": "PinMyPic",
+          "url": "https://pinmypic.online"
+        },
+        "image": (event as any).coverImage || "https://pinmypic.online/logo.png"
     }))
   };
 

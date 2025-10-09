@@ -21,8 +21,8 @@ const Index = () => {
     "@type": "Organization",
     "name": "PinMyPic",
     "description": "Professional photography services with AI-powered face recognition technology",
-    "url": "https://pinmypic.com",
-    "logo": "https://pinmypic.com/logo.png",
+    "url": "https://pinmypic.online",
+    "logo": "https://pinmypic.online/logo.png",
     "contactPoint": {
       "@type": "ContactPoint",
       "telephone": "+91-9025943634",
@@ -36,7 +36,7 @@ const Index = () => {
       "addressCountry": "IN"
     },
     "sameAs": [
-      "https://pinmypic.com"
+      "https://pinmypic.online"
     ],
     "service": [
       {

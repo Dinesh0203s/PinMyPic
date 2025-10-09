@@ -1,5 +1,5 @@
 # Robots.txt for PinMyPic - AI Photography Platform
-# https://pinmypic.com
+# https://pinmypic.online
 
 # Allow all search engines to crawl the site
 User-agent: *
@@ -47,7 +47,7 @@ Allow: /logo.png
 Allow: /favicon.ico
 
 # Sitemap location
-Sitemap: https://pinmypic.com/sitemap.xml
+Sitemap: https://pinmypic.online/sitemap.xml
 
 # Host declaration
-Host: https://pinmypic.com
+Host: https://pinmypic.online

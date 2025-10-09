@@ -15,13 +15,13 @@ const SEOHead = ({
   title = "PinMyPic - AI-Powered Photography & Face Recognition | Professional Event Photography",
   description = "Professional photography services with AI-powered face recognition technology. Find yourself in event photos instantly. Wedding, corporate, and party photography in Coimbatore, Tamil Nadu.",
   keywords = "photography, face recognition, AI photography, event photography, wedding photography, corporate events, photo gallery, Coimbatore photography, Tamil Nadu, professional photographer, photo booking, instant photo finder",
-  image = "https://pinmypic.com/logo.png",
-  url = "https://pinmypic.com",
+  image = "https://pinmypic.online/logo.png",
+  url = "https://pinmypic.online",
   type = "website",
   structuredData
 }: SEOHeadProps) => {
   const fullTitle = title.includes('PinMyPic') ? title : `${title} | PinMyPic`;
-  const fullUrl = url.startsWith('http') ? url : `https://pinmypic.com${url}`;
+  const fullUrl = url.startsWith('http') ? url : `https://pinmypic.online${url}`;
 
   useEffect(() => {
     // Update document title for better UX

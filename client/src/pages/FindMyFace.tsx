@@ -91,7 +91,7 @@ const FindMyFace = () => {
     "@type": "WebApplication",
     "name": "FindMyFace - AI Face Recognition",
     "description": "Find yourself in event photos using advanced AI face recognition technology. Upload your photo and discover all your photos from professional photography events.",
-    "url": "https://pinmypic.com/findmyface",
+    "url": "https://pinmypic.online/findmyface",
     "applicationCategory": "PhotographyApplication",
     "operatingSystem": "Web Browser",
     "offers": {
@@ -110,7 +110,7 @@ const FindMyFace = () => {
     "provider": {
       "@type": "Organization",
       "name": "PinMyPic",
-      "url": "https://pinmypic.com"
+      "url": "https://pinmypic.online"
     }
   };
 

@@ -6,7 +6,7 @@
 
   <!-- Homepage -->
   <url>
-    <loc>https://pinmypic.com/</loc>
+    <loc>https://pinmypic.online/</loc>
     <lastmod>2025-01-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
@@ -14,7 +14,7 @@
 
   <!-- Events Page -->
   <url>
-    <loc>https://pinmypic.com/events</loc>
+    <loc>https://pinmypic.online/events</loc>
     <lastmod>2025-01-27</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
@@ -22,7 +22,7 @@
 
   <!-- FindMyFace Page -->
   <url>
-    <loc>https://pinmypic.com/findmyface</loc>
+    <loc>https://pinmypic.online/findmyface</loc>
     <lastmod>2025-01-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -30,7 +30,7 @@
 
   <!-- Contact Page -->
   <url>
-    <loc>https://pinmypic.com/contact</loc>
+    <loc>https://pinmypic.online/contact</loc>
     <lastmod>2025-01-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
@@ -38,7 +38,7 @@
 
   <!-- Booking Page -->
   <url>
-    <loc>https://pinmypic.com/booking</loc>
+    <loc>https://pinmypic.online/booking</loc>
     <lastmod>2025-01-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -46,7 +46,7 @@
 
   <!-- Profile Page -->
   <url>
-    <loc>https://pinmypic.com/profile</loc>
+    <loc>https://pinmypic.online/profile</loc>
     <lastmod>2025-01-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -54,7 +54,7 @@
 
   <!-- Saved Photos Page -->
   <url>
-    <loc>https://pinmypic.com/saved-photos</loc>
+    <loc>https://pinmypic.online/saved-photos</loc>
     <lastmod>2025-01-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>

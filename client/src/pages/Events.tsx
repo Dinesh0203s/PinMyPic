@@ -20,6 +20,7 @@ import { useLocation, useParams, useSearchParams, useNavigate } from 'react-rout
 import JSZip from 'jszip';
 import { useDownloadManager } from '@/hooks/useDownloadManager';
 import DownloadProgressModal from '@/components/DownloadProgressModal';
+import SEOHead from '@/components/SEOHead';
 
 const Events = () => {
   const { eventId: urlEventId } = useParams<{ eventId: string }>();
@@ -1128,8 +1129,48 @@ const Events = () => {
     );
   }
 
+  // SEO structured data for events page
+  const eventsStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "name": "Photography Events Gallery",
+    "description": "Browse professional photography events with AI-powered face recognition. Wedding, corporate, and party photography in Coimbatore, Tamil Nadu.",
+    "url": "https://pinmypic.com/events",
+    "numberOfItems": totalEvents,
+    "itemListElement": events.slice(0, 10).map((event, index) => ({
+      "@type": "Event",
+      "position": index + 1,
+      "name": event.title,
+      "description": event.description,
+      "startDate": event.eventDate,
+      "location": {
+        "@type": "Place",
+        "name": event.location || "Coimbatore, Tamil Nadu",
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Coimbatore",
+          "addressRegion": "Tamil Nadu",
+          "addressCountry": "IN"
+        }
+      },
+      "organizer": {
+        "@type": "Organization",
+        "name": "PinMyPic",
+        "url": "https://pinmypic.com"
+      },
+      "image": (event as any).coverImage || "https://pinmypic.com/logo.png"
+    }))
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
+      <SEOHead 
+        title="Photography Events Gallery | PinMyPic - AI Face Recognition"
+        description="Browse professional photography events with AI-powered face recognition. Wedding, corporate, and party photography in Coimbatore, Tamil Nadu. Find yourself in event photos instantly."
+        keywords="photography events, event gallery, wedding photography, corporate events, party photography, Coimbatore events, Tamil Nadu photography, AI face recognition, event photos"
+        url="/events"
+        structuredData={eventsStructuredData}
+      />
       <Header />
       
       <main className="pt-20">

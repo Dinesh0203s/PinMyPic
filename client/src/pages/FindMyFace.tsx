@@ -3,6 +3,7 @@ import { Camera, Search, Download, Zap, Shield, Brain, Database, Cpu, Lock, Targ
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import SEOHead from '@/components/SEOHead';
 
 const FindMyFace = () => {
   // Scroll to top when page loads
@@ -84,8 +85,44 @@ const FindMyFace = () => {
     }
   ];
 
+  // SEO structured data for FindMyFace page
+  const findMyFaceStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "FindMyFace - AI Face Recognition",
+    "description": "Find yourself in event photos using advanced AI face recognition technology. Upload your photo and discover all your photos from professional photography events.",
+    "url": "https://pinmypic.com/findmyface",
+    "applicationCategory": "PhotographyApplication",
+    "operatingSystem": "Web Browser",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "INR"
+    },
+    "featureList": [
+      "AI Face Recognition",
+      "GPU-Accelerated Processing", 
+      "99%+ Accuracy Rate",
+      "Privacy & Security First",
+      "Instant Photo Discovery",
+      "High-Resolution Downloads"
+    ],
+    "provider": {
+      "@type": "Organization",
+      "name": "PinMyPic",
+      "url": "https://pinmypic.com"
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
+      <SEOHead 
+        title="FindMyFace - AI Face Recognition | Find Yourself in Event Photos"
+        description="Find yourself in event photos using advanced AI face recognition technology. Upload your photo and discover all your photos from professional photography events in Coimbatore, Tamil Nadu."
+        keywords="AI face recognition, find my face, photo search, event photos, facial recognition, photo discovery, AI technology, Coimbatore photography, Tamil Nadu"
+        url="/findmyface"
+        structuredData={findMyFaceStructuredData}
+      />
       <Header />
       
       <main className="pt-20">

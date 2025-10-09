@@ -54,8 +54,10 @@ const Header = () => {
             <Link to="/" className="flex items-center space-x-2 md:space-x-3">
               <img 
                 src={logoImage} 
-                alt="PinMyPic Logo" 
+                alt="PinMyPic - AI-Powered Photography & Face Recognition Logo" 
                 className="h-8 w-auto"
+                width="32"
+                height="32"
               />
               <span className="text-xl font-bold bg-gradient-to-r from-pink-500 via-orange-500 to-cyan-500 bg-clip-text text-transparent">
                 PinMyPic

@@ -1,14 +1,53 @@
+# Robots.txt for PinMyPic - AI Photography Platform
+# https://pinmypic.com
+
+# Allow all search engines to crawl the site
+User-agent: *
+Allow: /
+
+# Specific rules for major search engines
 User-agent: Googlebot
 Allow: /
+Crawl-delay: 1
 
 User-agent: Bingbot
 Allow: /
+Crawl-delay: 1
 
+User-agent: Slurp
+Allow: /
+Crawl-delay: 1
+
+# Social media crawlers
 User-agent: Twitterbot
 Allow: /
 
 User-agent: facebookexternalhit
 Allow: /
 
-User-agent: *
+User-agent: LinkedInBot
 Allow: /
+
+# Block access to admin and private areas
+Disallow: /admin/
+Disallow: /api/
+Disallow: /qr-access/
+Disallow: /alerts/
+
+# Block access to user-specific content
+Disallow: /profile/
+Disallow: /saved-photos/
+Disallow: /booking/
+
+# Allow access to public assets
+Allow: /public/
+Allow: /assets/
+Allow: /images/
+Allow: /logo.png
+Allow: /favicon.ico
+
+# Sitemap location
+Sitemap: https://pinmypic.com/sitemap.xml
+
+# Host declaration
+Host: https://pinmypic.com

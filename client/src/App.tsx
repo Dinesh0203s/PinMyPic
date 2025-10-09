@@ -9,6 +9,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { Suspense, lazy, useEffect } from "react";
 import LoadingSpinner from "./components/LoadingSpinner";
 import ScrollToTop from "./components/ScrollToTop";
+import { HelmetProvider } from "react-helmet-async";
 
 // Lazy load all pages for better performance
 const Index = lazy(() => import("./pages/Index"));
@@ -68,52 +69,54 @@ const queryClient = new QueryClient({
 const App = () => {
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <AdminStatusNotification />
-            <BrowserRouter>
-              <ScrollToTop />
-              <Suspense fallback={<LoadingSpinner />}>
-                <Routes>
-                  <Route path="/" element={<Index />} />
-                  <Route path="/events" element={<Events />} />
-                  <Route path="/event/:eventId" element={<Events />} />
-                  <Route path="/findmyface" element={<FindMyFace />} />
-                  <Route path="/contact" element={<Contact />} />
+      <HelmetProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <AdminStatusNotification />
+              <BrowserRouter>
+                <ScrollToTop />
+                <Suspense fallback={<LoadingSpinner />}>
+                  <Routes>
+                    <Route path="/" element={<Index />} />
+                    <Route path="/events" element={<Events />} />
+                    <Route path="/event/:eventId" element={<Events />} />
+                    <Route path="/findmyface" element={<FindMyFace />} />
+                    <Route path="/contact" element={<Contact />} />
 
-                  <Route path="/booking" element={
-                    <ProtectedRoute>
-                      <Booking />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/profile" element={
-                    <ProtectedRoute>
-                      <Profile />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/saved-photos" element={
-                    <ProtectedRoute>
-                      <SavedPhotos />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/admin" element={
-                    <ProtectedRoute requireAdmin>
-                      <AdminDashboard />
-                    </ProtectedRoute>
-                  } />
+                    <Route path="/booking" element={
+                      <ProtectedRoute>
+                        <Booking />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/profile" element={
+                      <ProtectedRoute>
+                        <Profile />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/saved-photos" element={
+                      <ProtectedRoute>
+                        <SavedPhotos />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/admin" element={
+                      <ProtectedRoute requireAdmin>
+                        <AdminDashboard />
+                      </ProtectedRoute>
+                    } />
 
-                  <Route path="/qr-access/:eventId" element={<QRAccess />} />
-                  <Route path="/alerts" element={<AlertExamples />} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Suspense>
-            </BrowserRouter>
-          </TooltipProvider>
-        </AuthProvider>
-      </QueryClientProvider>
+                    <Route path="/qr-access/:eventId" element={<QRAccess />} />
+                    <Route path="/alerts" element={<AlertExamples />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </Suspense>
+              </BrowserRouter>
+            </TooltipProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </HelmetProvider>
     </ErrorBoundary>
   );
 };

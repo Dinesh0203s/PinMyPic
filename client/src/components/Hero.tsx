@@ -35,8 +35,8 @@ const Hero = () => {
           </h1>
           
           <p className="text-xl md:text-2xl text-white/90 mb-8 max-w-2xl mx-auto leading-relaxed">
-            Professional photography services with AI-powered face recognition. 
-            Find yourself in any event instantly.
+            Professional photography services with AI-powered face recognition technology. 
+            Find yourself in any event photos instantly. Wedding, corporate, and party photography in Coimbatore, Tamil Nadu.
           </p>
 
           {/* CTA Buttons */}
@@ -61,7 +61,7 @@ const Hero = () => {
                 <Camera className="h-6 w-6 text-white" />
               </div>
               <h3 className="text-xl font-semibold text-white mb-2">Professional Photography</h3>
-              <p className="text-white/80">High-quality event photography with professional equipment and expertise.</p>
+              <p className="text-white/80">High-quality wedding, corporate, and event photography with professional equipment and expertise in Coimbatore, Tamil Nadu.</p>
             </div>
 
             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105 border border-white/20">
@@ -69,7 +69,7 @@ const Hero = () => {
                 <Search className="h-6 w-6 text-white" />
               </div>
               <h3 className="text-xl font-semibold text-white mb-2">AI Face Recognition</h3>
-              <p className="text-white/80">Find yourself in thousands of photos using our advanced AI technology.</p>
+              <p className="text-white/80">Find yourself in thousands of event photos using our advanced AI face recognition technology. Instant photo discovery.</p>
             </div>
 
             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105 border border-white/20">
@@ -77,7 +77,7 @@ const Hero = () => {
                 <Download className="h-6 w-6 text-white" />
               </div>
               <h3 className="text-xl font-semibold text-white mb-2">Instant Download</h3>
-              <p className="text-white/80">Download your favorite photos instantly in high resolution.</p>
+              <p className="text-white/80">Download your favorite event photos instantly in high resolution. Professional quality photography downloads.</p>
             </div>
           </div>
         </div>

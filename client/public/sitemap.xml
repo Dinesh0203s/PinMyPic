@@ -44,4 +44,12 @@
     <priority>0.8</priority>
   </url>
 
+  <!-- Brand Page -->
+  <url>
+    <loc>https://pinmypic.online/brand</loc>
+    <lastmod>2025-01-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
 </urlset>

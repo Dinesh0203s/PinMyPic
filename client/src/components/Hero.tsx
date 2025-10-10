@@ -35,7 +35,7 @@ const Hero = () => {
           </h1>
           
           <p className="text-xl md:text-2xl text-white/90 mb-8 max-w-2xl mx-auto leading-relaxed">
-            Professional photography services with AI-powered face recognition technology. 
+            PinMyPic (PinMPic) - Professional photography services with AI-powered face recognition technology. 
             Find yourself in any event photos instantly. Wedding, corporate, and party photography in Coimbatore, Tamil Nadu.
           </p>
 

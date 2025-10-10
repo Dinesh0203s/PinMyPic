@@ -17,6 +17,7 @@ const Events = lazy(() => import("./pages/Events"));
 const FindMyFace = lazy(() => import("./pages/FindMyFace"));
 const Booking = lazy(() => import("./pages/Booking"));
 const Contact = lazy(() => import("./pages/Contact"));
+const Brand = lazy(() => import("./pages/Brand"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const Profile = lazy(() => import("./pages/Profile"));
 const SavedPhotos = lazy(() => import("./pages/SavedPhotos"));
@@ -85,6 +86,7 @@ const App = () => {
                     <Route path="/event/:eventId" element={<Events />} />
                     <Route path="/findmyface" element={<FindMyFace />} />
                     <Route path="/contact" element={<Contact />} />
+                    <Route path="/brand" element={<Brand />} />
 
                     <Route path="/booking" element={
                       <ProtectedRoute>

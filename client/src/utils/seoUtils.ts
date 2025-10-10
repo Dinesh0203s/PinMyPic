@@ -138,8 +138,8 @@ export const generateStructuredData = (type: string, data?: any) => {
     "@type": "Organization",
     "name": "PinMyPic",
     "description": "Professional photography services with AI-powered face recognition technology",
-    "url": "https://pinmypic.com",
-    "logo": "https://pinmypic.com/logo.png",
+    "url": "https://pinmypic.online",
+    "logo": "https://pinmypic.online/logo.png",
     "contactPoint": {
       "@type": "ContactPoint",
       "telephone": "+91-9025943634",
@@ -183,7 +183,7 @@ export const generateStructuredData = (type: string, data?: any) => {
         "@type": "ItemList",
         "name": "Photography Events Gallery",
         "description": "Browse professional photography events with AI-powered face recognition",
-        "url": "https://pinmypic.com/events",
+        "url": "https://pinmypic.online/events",
         "numberOfItems": data?.totalEvents || 0,
         "itemListElement": data?.events?.slice(0, 10).map((event: any, index: number) => ({
           "@type": "Event",
@@ -198,7 +198,7 @@ export const generateStructuredData = (type: string, data?: any) => {
           "organizer": {
             "@type": "Organization",
             "name": "PinMyPic",
-            "url": "https://pinmypic.com"
+            "url": "https://pinmypic.online"
           }
         })) || []
       };

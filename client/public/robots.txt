@@ -45,6 +45,8 @@ Allow: /assets/
 Allow: /images/
 Allow: /logo.png
 Allow: /favicon.ico
+Allow: /hero-background.jpg
+Allow: /google-site-verification.html
 
 # Sitemap location
 Sitemap: https://pinmypic.online/sitemap.xml

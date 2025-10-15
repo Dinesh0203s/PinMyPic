@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { Upload, Camera, X, FileImage, AlertCircle, CheckCircle, Smartphone, Shield, Settings } from 'lucide-react';
+import { Upload, Camera, X, FileImage, AlertCircle, CheckCircle, Smartphone, Shield, Settings, RotateCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { UploadOptimizer, MemoryMonitor } from '@/utils/uploadOptimizer';
 import { uploadQueueManager, DynamicUploadStats } from '@/utils/dynamicUploadProcessor';
@@ -621,6 +621,67 @@ export function PhotoUploadDialog({
     }
   };
 
+  /**
+   * Retry all failed uploads
+   */
+  const handleRetryAll = async () => {
+    const failedFiles = uploadFiles.filter(f => f.status === 'error');
+    
+    if (failedFiles.length === 0) {
+      toast({
+        title: "No failed uploads",
+        description: "There are no failed uploads to retry.",
+        variant: "default"
+      });
+      return;
+    }
+
+    // Reset failed files to pending status
+    updateUploadFiles(prev => prev.map(f => 
+      f.status === 'error' ? { ...f, status: 'pending' as const, progress: 0, error: undefined } : f
+    ));
+
+    toast({
+      title: "Retrying all failed uploads",
+      description: `Retrying ${failedFiles.length} failed upload(s).`,
+    });
+
+    // Start upload process for the retried files
+    await handleUploadAll();
+  };
+
+  /**
+   * Retry failed uploads (alias for handleRetryAll)
+   */
+  const handleRetryFailed = handleRetryAll;
+
+  /**
+   * Retry a single failed file
+   */
+  const handleRetrySingle = async (fileId: string) => {
+    const file = uploadFiles.find(f => f.id === fileId);
+    if (!file || file.status !== 'error') {
+      return;
+    }
+
+    // Reset file to pending status
+    updateUploadFiles(prev => prev.map(f => 
+      f.id === fileId ? { ...f, status: 'pending' as const, progress: 0, error: undefined } : f
+    ));
+
+    toast({
+      title: "Retrying upload",
+      description: `Retrying ${file.file.name}`,
+    });
+
+    // Upload the single file
+    try {
+      await uploadPhoto(file);
+    } catch (error) {
+      console.error('Retry failed:', error);
+    }
+  };
+
   // Optimize state calculations with useMemo to prevent recalculations on every render
   const uploadStats = useMemo(() => {
     const completed = uploadFiles.filter(f => f.status === 'completed').length;
@@ -833,6 +894,19 @@ export function PhotoUploadDialog({
                   >
                     {isUploading ? 'Uploading...' : eventCompressionSetting ? 'Upload Remaining' : 'Upload All'}
                   </Button>
+                  
+                  {/* Retry All Button - Only show when there are failed uploads */}
+                  {uploadStats.errors > 0 && (
+                    <Button
+                      onClick={handleRetryAll}
+                      disabled={isUploading}
+                      className="bg-orange-600 hover:bg-orange-700 text-white border-orange-600 font-medium"
+                    >
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      Retry All Failed ({uploadStats.errors})
+                    </Button>
+                  )}
+                  
                   <Button
                     variant="outline"
                     onClick={() => updateUploadFiles(() => [])}
@@ -856,9 +930,26 @@ export function PhotoUploadDialog({
                   />
                   <div className="flex justify-between text-xs text-gray-500">
                     <span>{uploadStats.uploading} uploading</span>
-                    <span>{uploadStats.errors} failed</span>
+                    <span className={uploadStats.errors > 0 ? "text-orange-600 font-medium" : ""}>
+                      {uploadStats.errors} failed
+                    </span>
                     <span>{uploadStats.pending} pending</span>
                   </div>
+                  
+                  {/* Retry Available Indicator */}
+                  {uploadStats.errors > 0 && (
+                    <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded-lg">
+                      <div className="flex items-center gap-2 text-sm text-orange-700">
+                        <RotateCcw className="h-4 w-4" />
+                        <span className="font-medium">
+                          {uploadStats.errors} upload{uploadStats.errors > 1 ? 's' : ''} failed
+                        </span>
+                        <span className="text-orange-600">
+                          - Use "Retry All" button to attempt upload again
+                        </span>
+                      </div>
+                    </div>
+                  )}
                   
                   {/* Dynamic Upload Stats */}
                   {dynamicStats && (
@@ -968,6 +1059,18 @@ export function PhotoUploadDialog({
                               <X className="h-4 w-4" />
                             </Button>
                           )}
+                          
+                          {!isUploading && uploadFile.status === 'error' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRetrySingle(uploadFile.id)}
+                              className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                              title="Retry this upload"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                       
@@ -982,10 +1085,24 @@ export function PhotoUploadDialog({
           )}
 
           {/* Action Buttons */}
-          <div className="flex justify-end gap-2 border-t pt-4">
-            <Button variant="outline" onClick={handleClose} disabled={isUploading}>
-              Close
-            </Button>
+          <div className="flex justify-between items-center border-t pt-4">
+            {/* Retry All Button - Bottom section */}
+            {uploadStats.errors > 0 && (
+              <Button
+                onClick={handleRetryAll}
+                disabled={isUploading}
+                className="bg-orange-600 hover:bg-orange-700 text-white border-orange-600 font-medium"
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Retry All Failed ({uploadStats.errors})
+              </Button>
+            )}
+            
+            <div className="flex gap-2 ml-auto">
+              <Button variant="outline" onClick={handleClose} disabled={isUploading}>
+                Close
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

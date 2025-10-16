@@ -1169,7 +1169,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Bulk delete photos with captcha verification (MUST come before individual photo delete route)
-  app.delete("/api/photos/bulk", async (req: any, res) => {
+  app.delete("/api/photos/bulk", authenticateUser, requirePermission('photos'), async (req: AuthenticatedRequest, res) => {
     // Development bypass for authentication issues
     if (process.env.NODE_ENV === 'development') {
       req.user = {

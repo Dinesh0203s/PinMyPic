@@ -180,6 +180,8 @@ const AdminPhotoGallery = ({
   const handleCaptchaVerify = async (captchaResponse: string) => {
     if (!onBulkDeletePhotos || selectedPhotos.size === 0) return;
     
+    console.log('Captcha verified, starting bulk delete for', selectedPhotos.size, 'photos');
+    
     // Validate photo IDs before sending
     const photoIds = Array.from(selectedPhotos);
     const invalidIds = photoIds.filter(id => !id || typeof id !== 'string' || id.trim() === '');
@@ -204,15 +206,19 @@ const AdminPhotoGallery = ({
       return;
     }
     
+    console.log('All photo IDs validated, proceeding with bulk delete');
     setIsBulkDeleting(true);
     setShowCaptchaDialog(false);
     
     try {
       await onBulkDeletePhotos(photoIds);
+      console.log('Bulk delete completed successfully');
       setSelectedPhotos(new Set());
       setIsMultiSelectMode(false);
     } catch (error) {
       console.error('Bulk delete failed:', error);
+      // Show error message to user
+      alert(`Bulk delete failed: ${error.message || 'Unknown error'}`);
     } finally {
       setIsBulkDeleting(false);
     }

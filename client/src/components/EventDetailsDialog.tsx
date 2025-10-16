@@ -246,11 +246,27 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
   };
 
   const handleBulkDeletePhotos = async (photoIds: string[]) => {
+    console.log('Starting bulk delete for photo IDs:', photoIds);
+    
     try {
+      // Validate photo IDs before sending
+      if (!photoIds || photoIds.length === 0) {
+        throw new Error('No photos selected for deletion');
+      }
+      
+      const invalidIds = photoIds.filter(id => !id || typeof id !== 'string' || id.trim() === '');
+      if (invalidIds.length > 0) {
+        console.error('Invalid photo IDs found:', invalidIds);
+        throw new Error(`Invalid photo IDs: ${invalidIds.join(', ')}`);
+      }
+      
+      console.log('Sending bulk delete request with', photoIds.length, 'photo IDs');
+      
       const response = await fetch('/api/photos/bulk', {
         method: 'DELETE',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await currentUser?.getIdToken()}`
         },
         body: JSON.stringify({
           photoIds,
@@ -258,8 +274,11 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
         })
       });
 
+      console.log('Bulk delete response status:', response.status);
+
       if (response.ok) {
         const result = await response.json();
+        console.log('Bulk delete successful:', result);
         
         toast({
           title: "Success",
@@ -272,9 +291,11 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
         onEventUpdated();
       } else {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete photos');
+        console.error('Bulk delete failed:', errorData);
+        throw new Error(errorData.error || `Failed to delete photos (${response.status})`);
       }
     } catch (error) {
+      console.error('Bulk delete error:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to delete photos",

@@ -38,14 +38,12 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         setImage(img);
-        // Initialize crop area to center of image
-        const centerX = (img.width - 200) / 2;
-        const centerY = (img.height - 200) / 2;
+        // Initialize crop area to cover the entire container (will be adjusted when container is available)
         setCropArea({
-          x: Math.max(0, centerX),
-          y: Math.max(0, centerY),
-          width: Math.min(200, img.width),
-          height: Math.min(200, img.height)
+          x: 0,
+          y: 0,
+          width: 400, // Default container width
+          height: 400 // Default container height
         });
       };
       img.onerror = () => {
@@ -81,8 +79,8 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
       
       setCropArea(prev => ({
         ...prev,
-        x: Math.max(0, Math.min(newX, image.width - prev.width)),
-        y: Math.max(0, Math.min(newY, image.height - prev.height))
+        x: Math.max(0, Math.min(newX, rect.width - prev.width)),
+        y: Math.max(0, Math.min(newY, rect.height - prev.height))
       }));
     }
   };
@@ -103,28 +101,157 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
 
   // Reset to original
   const handleReset = () => {
-    if (!image) return;
+    if (!image || !containerRef.current) return;
     setZoom(1);
     setRotation(0);
-    const centerX = (image.width - 200) / 2;
-    const centerY = (image.height - 200) / 2;
+    const rect = containerRef.current.getBoundingClientRect();
     setCropArea({
-      x: Math.max(0, centerX),
-      y: Math.max(0, centerY),
-      width: Math.min(200, image.width),
-      height: Math.min(200, image.height)
+      x: 0,
+      y: 0,
+      width: rect.width,
+      height: rect.height
     });
   };
 
+  // Update canvas preview
+  const updateCanvasPreview = () => {
+    if (!image || !canvasRef.current || !containerRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const containerRect = containerRef.current.getBoundingClientRect();
+    
+    // Calculate the actual image display dimensions in the container
+    const imageAspectRatio = image.width / image.height;
+    const containerAspectRatio = containerRect.width / containerRect.height;
+    
+    let imageDisplayWidth, imageDisplayHeight, imageOffsetX, imageOffsetY;
+    
+    if (imageAspectRatio > containerAspectRatio) {
+      // Image is wider than container
+      imageDisplayWidth = containerRect.width;
+      imageDisplayHeight = containerRect.width / imageAspectRatio;
+      imageOffsetX = 0;
+      imageOffsetY = (containerRect.height - imageDisplayHeight) / 2;
+    } else {
+      // Image is taller than container
+      imageDisplayHeight = containerRect.height;
+      imageDisplayWidth = containerRect.height * imageAspectRatio;
+      imageOffsetX = (containerRect.width - imageDisplayWidth) / 2;
+      imageOffsetY = 0;
+    }
+
+    // Convert crop area from container coordinates to image coordinates
+    const cropX = (cropArea.x - imageOffsetX) * (image.width / imageDisplayWidth);
+    const cropY = (cropArea.y - imageOffsetY) * (image.height / imageDisplayHeight);
+    const cropWidth = cropArea.width * (image.width / imageDisplayWidth);
+    const cropHeight = cropArea.height * (image.height / imageDisplayHeight);
+
+    // Set canvas size to crop area
+    canvas.width = cropArea.width;
+    canvas.height = cropArea.height;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Apply transformations
+    ctx.save();
+    
+    // Move to center for rotation
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    
+    // Apply rotation
+    ctx.rotate((rotation * Math.PI) / 180);
+    
+    // Apply zoom
+    ctx.scale(zoom, zoom);
+    
+    // Draw image centered with proper aspect ratio
+    const sourceX = Math.max(0, cropX);
+    const sourceY = Math.max(0, cropY);
+    const sourceWidth = Math.min(cropWidth, image.width - sourceX);
+    const sourceHeight = Math.min(cropHeight, image.height - sourceY);
+    
+    // Calculate destination dimensions maintaining aspect ratio
+    const aspectRatio = sourceWidth / sourceHeight;
+    let destWidth = canvas.width / zoom;
+    let destHeight = canvas.height / zoom;
+    
+    if (aspectRatio > destWidth / destHeight) {
+      // Source is wider, fit to width
+      destHeight = destWidth / aspectRatio;
+    } else {
+      // Source is taller, fit to height
+      destWidth = destHeight * aspectRatio;
+    }
+    
+    ctx.drawImage(
+      image,
+      sourceX, sourceY, sourceWidth, sourceHeight,
+      -destWidth / 2, -destHeight / 2,
+      destWidth, destHeight
+    );
+    
+    ctx.restore();
+  };
+
+  // Update preview when crop area, zoom, or rotation changes
+  useEffect(() => {
+    updateCanvasPreview();
+  }, [cropArea, zoom, rotation, image]);
+
+  // Initialize crop area to cover the entire container when both image and container are available
+  useEffect(() => {
+    if (image && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setCropArea({
+        x: 0,
+        y: 0,
+        width: rect.width,
+        height: rect.height
+      });
+    }
+  }, [image, open]);
+
   // Save edited image
   const handleSave = async () => {
-    if (!image || !canvasRef.current) return;
+    if (!image || !canvasRef.current || !containerRef.current) return;
     
     setIsLoading(true);
     try {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
+
+      const containerRect = containerRef.current.getBoundingClientRect();
+      
+      // Calculate the actual image display dimensions in the container
+      const imageAspectRatio = image.width / image.height;
+      const containerAspectRatio = containerRect.width / containerRect.height;
+      
+      let imageDisplayWidth, imageDisplayHeight, imageOffsetX, imageOffsetY;
+      
+      if (imageAspectRatio > containerAspectRatio) {
+        // Image is wider than container
+        imageDisplayWidth = containerRect.width;
+        imageDisplayHeight = containerRect.width / imageAspectRatio;
+        imageOffsetX = 0;
+        imageOffsetY = (containerRect.height - imageDisplayHeight) / 2;
+      } else {
+        // Image is taller than container
+        imageDisplayHeight = containerRect.height;
+        imageDisplayWidth = containerRect.height * imageAspectRatio;
+        imageOffsetX = (containerRect.width - imageDisplayWidth) / 2;
+        imageOffsetY = 0;
+      }
+
+      // Convert crop area from container coordinates to image coordinates
+      const cropX = (cropArea.x - imageOffsetX) * (image.width / imageDisplayWidth);
+      const cropY = (cropArea.y - imageOffsetY) * (image.height / imageDisplayHeight);
+      const cropWidth = cropArea.width * (image.width / imageDisplayWidth);
+      const cropHeight = cropArea.height * (image.height / imageDisplayHeight);
 
       // Set canvas size to crop area
       canvas.width = cropArea.width;
@@ -145,12 +272,30 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
       // Apply zoom
       ctx.scale(zoom, zoom);
       
-      // Draw image centered
+      // Draw image centered with proper aspect ratio
+      const sourceX = Math.max(0, cropX);
+      const sourceY = Math.max(0, cropY);
+      const sourceWidth = Math.min(cropWidth, image.width - sourceX);
+      const sourceHeight = Math.min(cropHeight, image.height - sourceY);
+      
+      // Calculate destination dimensions maintaining aspect ratio
+      const aspectRatio = sourceWidth / sourceHeight;
+      let destWidth = canvas.width / zoom;
+      let destHeight = canvas.height / zoom;
+      
+      if (aspectRatio > destWidth / destHeight) {
+        // Source is wider, fit to width
+        destHeight = destWidth / aspectRatio;
+      } else {
+        // Source is taller, fit to height
+        destWidth = destHeight * aspectRatio;
+      }
+      
       ctx.drawImage(
         image,
-        cropArea.x, cropArea.y, cropArea.width, cropArea.height,
-        -canvas.width / 2 / zoom, -canvas.height / 2 / zoom,
-        canvas.width / zoom, canvas.height / zoom
+        sourceX, sourceY, sourceWidth, sourceHeight,
+        -destWidth / 2, -destHeight / 2,
+        destWidth, destHeight
       );
       
       ctx.restore();
@@ -242,50 +387,57 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
           </div>
 
           {/* Image Editor */}
-          <div className="relative border-2 border-dashed border-gray-300 rounded-lg overflow-hidden">
+          <div className="relative border-2 border-dashed border-gray-300 rounded-lg overflow-hidden bg-gray-50">
             <div
               ref={containerRef}
-              className="relative cursor-move"
+              className="relative cursor-move min-h-[400px] flex items-center justify-center"
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
-              style={{
-                width: '100%',
-                height: '300px',
-                backgroundImage: `url(${imageUrl})`,
-                backgroundSize: 'contain',
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'center',
-                transform: `scale(${zoom}) rotate(${rotation}deg)`,
-                transformOrigin: 'center'
-              }}
             >
+              {image && (
+                <img
+                  src={imageUrl}
+                  alt="Edit thumbnail"
+                  className="max-w-full max-h-full object-contain"
+                  style={{
+                    transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                    transformOrigin: 'center'
+                  }}
+                />
+              )}
               {/* Crop overlay */}
-              <div
-                className="absolute border-2 border-pink-500 bg-pink-500 bg-opacity-20 cursor-move"
-                style={{
-                  left: `${(cropArea.x / image.width) * 100}%`,
-                  top: `${(cropArea.y / image.height) * 100}%`,
-                  width: `${(cropArea.width / image.width) * 100}%`,
-                  height: `${(cropArea.height / image.height) * 100}%`,
-                }}
-              >
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <Move className="h-6 w-6 text-pink-500" />
+              {image && (
+                <div
+                  className="absolute border-2 border-pink-500 bg-pink-500 bg-opacity-20 cursor-move"
+                  style={{
+                    left: `${cropArea.x}px`,
+                    top: `${cropArea.y}px`,
+                    width: `${cropArea.width}px`,
+                    height: `${cropArea.height}px`,
+                  }}
+                >
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Move className="h-6 w-6 text-pink-500" />
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
           {/* Preview */}
           <div className="flex items-center gap-4">
             <span className="text-sm font-medium">Preview:</span>
-            <div className="w-20 h-20 border border-gray-300 rounded overflow-hidden">
+            <div className="w-20 h-20 border border-gray-300 rounded overflow-hidden bg-gray-100">
               <canvas
                 ref={canvasRef}
-                className="w-full h-full object-cover"
-                style={{ transform: `rotate(${rotation}deg) scale(${zoom})` }}
+                className="w-full h-full"
+                style={{ 
+                  maxWidth: '100%', 
+                  maxHeight: '100%',
+                  objectFit: 'contain'
+                }}
               />
             </div>
           </div>

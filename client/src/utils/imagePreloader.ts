@@ -258,6 +258,62 @@ export const getDisplayImageUrl = (originalUrl: string, thumbnail: boolean = tru
   });
 };
 
+// Generate HD thumbnail URL (high quality for better visual appearance)
+export const getHDThumbnailUrl = (originalUrl: string) => {
+  // For GridFS images, use high quality settings for HD thumbnails
+  if (originalUrl.startsWith('/api/images/')) {
+    const url = new URL(originalUrl, window.location.origin);
+    url.searchParams.set('thumbnail', 'true');
+    url.searchParams.set('quality', '95'); // High quality for HD thumbnails
+    url.searchParams.set('format', 'webp'); // Use WebP for better compression
+    return url.toString();
+  }
+  return getOptimizedImageUrl(originalUrl, {
+    thumbnail: true,
+    quality: 95, // High quality for HD thumbnails
+    format: 'webp',
+    download: false
+  });
+};
+
+// Generate original size thumbnail URL for event cards (full resolution)
+export const getOriginalSizeThumbnailUrl = (originalUrl: string) => {
+  // For GridFS images, use original size without thumbnail parameter
+  if (originalUrl.startsWith('/api/images/')) {
+    const url = new URL(originalUrl, window.location.origin);
+    // Don't set thumbnail=true to get original size
+    url.searchParams.set('quality', '95'); // High quality for original size
+    url.searchParams.set('format', 'webp'); // Use WebP for better compression
+    return url.toString();
+  }
+  return getOptimizedImageUrl(originalUrl, {
+    thumbnail: false, // Don't use thumbnail mode
+    quality: 95, // High quality for original size
+    format: 'webp',
+    download: false
+  });
+};
+
+// Generate high-quality 400x400 thumbnail URL for event cards
+export const getEventCardThumbnailUrl = (originalUrl: string) => {
+  // For GridFS images, use high quality with specific size
+  if (originalUrl.startsWith('/api/images/')) {
+    const url = new URL(originalUrl, window.location.origin);
+    url.searchParams.set('width', '400');
+    url.searchParams.set('height', '400');
+    url.searchParams.set('quality', '100'); // Maximum quality for event cards
+    url.searchParams.set('format', 'webp'); // Use WebP for better compression
+    url.searchParams.set('fit', 'cover'); // Cover the entire 400x400 area
+    return url.toString();
+  }
+  return getOptimizedImageUrl(originalUrl, {
+    thumbnail: false,
+    quality: 100, // Maximum quality for event cards
+    format: 'webp',
+    download: false
+  });
+};
+
 // Generate download URL (original quality)
 export const getDownloadImageUrl = (originalUrl: string) => {
   return getOptimizedImageUrl(originalUrl, {

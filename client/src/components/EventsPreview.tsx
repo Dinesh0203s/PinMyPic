@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { getHDThumbnailUrl, getOriginalSizeThumbnailUrl, getEventCardThumbnailUrl } from '@/utils/imagePreloader';
 
 interface Event {
   id: string;
@@ -131,9 +132,9 @@ const EventsPreview = () => {
             <Card key={event.id} className="group hover:shadow-xl transition-all duration-300 hover:scale-105 overflow-hidden">
               <div className="relative overflow-hidden">
                 <img 
-                  src={event.thumbnailUrl || 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=400&h=300&fit=crop'} 
+                  src={event.thumbnailUrl ? getEventCardThumbnailUrl(event.thumbnailUrl) : 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=400&h=300&fit=crop'} 
                   alt={event.title}
-                  className="w-full h-48 object-cover group-hover:scale-110 transition-transform duration-300"
+                  className="w-full h-[400px] object-cover group-hover:scale-110 transition-transform duration-300"
                   onError={(e) => {
                     e.currentTarget.src = 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=400&h=300&fit=crop';
                   }}

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { getHDThumbnailUrl, getOriginalSizeThumbnailUrl, getEventCardThumbnailUrl } from '@/utils/imagePreloader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   ArrowLeft, 
@@ -872,9 +873,9 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
                   {event.thumbnailUrl ? (
                     <div className="space-y-4">
                       <img 
-                        src={event.thumbnailUrl} 
+                        src={event.thumbnailUrl ? getEventCardThumbnailUrl(event.thumbnailUrl) : ''} 
                         alt="Event thumbnail" 
-                        className="w-full max-w-md h-48 object-cover rounded-lg border"
+                        className="w-full max-w-md h-[400px] object-cover rounded-lg border"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           target.src = 'https://via.placeholder.com/400x300?text=No+Thumbnail';
@@ -883,7 +884,7 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
                       <p className="text-xs text-gray-500">Current thumbnail image</p>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-center w-full max-w-md h-48 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300">
+                    <div className="flex items-center justify-center w-full max-w-md h-[400px] bg-gray-100 rounded-lg border-2 border-dashed border-gray-300">
                       <div className="text-center">
                         <ImageIcon className="h-12 w-12 text-gray-400 mx-auto mb-2" />
                         <p className="text-sm text-gray-500">No thumbnail set</p>
@@ -987,7 +988,7 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
                   <div className="flex items-center gap-4">
                     <div className="w-32 h-32 border border-gray-300 rounded-lg overflow-hidden">
                       <img
-                        src={event.thumbnailUrl}
+                        src={event.thumbnailUrl ? getEventCardThumbnailUrl(event.thumbnailUrl) : ''}
                         alt="Current thumbnail"
                         className="w-full h-full object-cover"
                       />

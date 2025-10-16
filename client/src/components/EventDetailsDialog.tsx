@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getHDThumbnailUrl, getOriginalSizeThumbnailUrl, getEventCardThumbnailUrl } from '@/utils/imagePreloader';
+import { getHDThumbnailUrl, getOriginalSizeThumbnailUrl, getEventCardThumbnailUrl, getPremiumEventCardThumbnailUrl } from '@/utils/imagePreloader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   ArrowLeft, 
@@ -38,7 +38,7 @@ import { PhotoUploadDialog } from './PhotoUploadDialog';
 import AdminPhotoGallery from './AdminPhotoGallery';
 import { DeleteConfirmation } from '@/components/ui/confirmation-alert';
 import { EventShareDialog } from './EventShareDialog';
-import { ThumbnailEditor } from './ThumbnailEditor';
+import { PremiumThumbnailEditor } from './PremiumThumbnailEditor';
 
 interface EventDetailsDialogProps {
   event: Event | null;
@@ -873,7 +873,7 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
                   {event.thumbnailUrl ? (
                     <div className="space-y-4">
                       <img 
-                        src={event.thumbnailUrl ? getEventCardThumbnailUrl(event.thumbnailUrl) : ''} 
+                        src={event.thumbnailUrl ? getPremiumEventCardThumbnailUrl(event.thumbnailUrl) : ''} 
                         alt="Event thumbnail" 
                         className="w-full max-w-md h-[400px] object-cover rounded-lg border"
                         onError={(e) => {
@@ -988,7 +988,7 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
                   <div className="flex items-center gap-4">
                     <div className="w-32 h-32 border border-gray-300 rounded-lg overflow-hidden">
                       <img
-                        src={event.thumbnailUrl ? getEventCardThumbnailUrl(event.thumbnailUrl) : ''}
+                        src={event.thumbnailUrl ? getPremiumEventCardThumbnailUrl(event.thumbnailUrl) : ''}
                         alt="Current thumbnail"
                         className="w-full h-full object-cover"
                       />
@@ -1192,7 +1192,7 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
       />
 
       {/* Thumbnail Editor */}
-      <ThumbnailEditor
+      <PremiumThumbnailEditor
         imageUrl={thumbnailEditImage}
         open={showThumbnailEditor}
         onOpenChange={setShowThumbnailEditor}

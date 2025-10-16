@@ -314,6 +314,29 @@ export const getEventCardThumbnailUrl = (originalUrl: string) => {
   });
 };
 
+// Generate premium 400x400 thumbnail URL for event cards with advanced optimization
+export const getPremiumEventCardThumbnailUrl = (originalUrl: string) => {
+  // For GridFS images, use premium quality with advanced settings
+  if (originalUrl.startsWith('/api/images/')) {
+    const url = new URL(originalUrl, window.location.origin);
+    url.searchParams.set('width', '400');
+    url.searchParams.set('height', '400');
+    url.searchParams.set('quality', '100'); // Maximum quality
+    url.searchParams.set('format', 'webp'); // WebP for best compression
+    url.searchParams.set('fit', 'cover'); // Cover the entire area
+    url.searchParams.set('position', 'center'); // Center the image
+    url.searchParams.set('sharpen', 'true'); // Apply sharpening
+    url.searchParams.set('progressive', 'true'); // Progressive loading
+    return url.toString();
+  }
+  return getOptimizedImageUrl(originalUrl, {
+    thumbnail: false,
+    quality: 100, // Maximum quality
+    format: 'webp',
+    download: false
+  });
+};
+
 // Generate download URL (original quality)
 export const getDownloadImageUrl = (originalUrl: string) => {
   return getOptimizedImageUrl(originalUrl, {

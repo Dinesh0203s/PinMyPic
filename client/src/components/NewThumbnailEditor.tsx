@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { RotateCcw, ZoomIn, ZoomOut, Move, Crop, Save, X } from 'lucide-react';
+import { RotateCcw, ZoomIn, ZoomOut, Move, Crop, Save, X, Maximize2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-interface ThumbnailEditorProps {
+interface NewThumbnailEditorProps {
   imageUrl: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -19,16 +19,19 @@ interface CropArea {
   height: number;
 }
 
-export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: ThumbnailEditorProps) {
+export function NewThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: NewThumbnailEditorProps) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
-  const [cropArea, setCropArea] = useState<CropArea>({ x: 0, y: 0, width: 200, height: 200 });
+  const [cropArea, setCropArea] = useState<CropArea>({ x: 0, y: 0, width: 400, height: 400 });
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [resizeHandle, setResizeHandle] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
   const { toast } = useToast();
 
   // Load image when component mounts or imageUrl changes
@@ -38,12 +41,16 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         setImage(img);
-        // Initialize crop area to cover the entire container (will be adjusted when container is available)
+        // Initialize crop area to center of image
+        const containerWidth = 500; // Default container width
+        const containerHeight = 400; // Default container height
+        const cropSize = Math.min(300, Math.min(containerWidth, containerHeight) * 0.8);
+        
         setCropArea({
-          x: 0,
-          y: 0,
-          width: 400, // Default container width
-          height: 400 // Default container height
+          x: (containerWidth - cropSize) / 2,
+          y: (containerHeight - cropSize) / 2,
+          width: cropSize,
+          height: cropSize
         });
       };
       img.onerror = () => {
@@ -57,64 +64,141 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
     }
   }, [imageUrl, open, toast]);
 
-  // Handle mouse events for dragging crop area
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!image) return;
-    setIsDragging(true);
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (rect) {
-      setDragStart({
-        x: e.clientX - rect.left - cropArea.x,
-        y: e.clientY - rect.top - cropArea.y
+  // Update crop area when container is available
+  useEffect(() => {
+    if (image && containerRef.current && open) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const cropSize = Math.min(300, Math.min(rect.width, rect.height) * 0.8);
+      
+      setCropArea({
+        x: (rect.width - cropSize) / 2,
+        y: (rect.height - cropSize) / 2,
+        width: cropSize,
+        height: cropSize
       });
     }
-  };
+  }, [image, open]);
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !image) return;
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (rect) {
-      const newX = e.clientX - rect.left - dragStart.x;
-      const newY = e.clientY - rect.top - dragStart.y;
-      
+  // Handle mouse down for dragging
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!image || !containerRef.current) return;
+    
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    // Check if clicking on resize handles
+    const handleSize = 8;
+    const { x: cropX, y: cropY, width, height } = cropArea;
+    
+    // Check each corner and edge
+    if (x >= cropX - handleSize && x <= cropX + handleSize && 
+        y >= cropY - handleSize && y <= cropY + handleSize) {
+      setResizeHandle('nw');
+    } else if (x >= cropX + width - handleSize && x <= cropX + width + handleSize && 
+               y >= cropY - handleSize && y <= cropY + handleSize) {
+      setResizeHandle('ne');
+    } else if (x >= cropX - handleSize && x <= cropX + handleSize && 
+               y >= cropY + height - handleSize && y <= cropY + height + handleSize) {
+      setResizeHandle('sw');
+    } else if (x >= cropX + width - handleSize && x <= cropX + width + handleSize && 
+               y >= cropY + height - handleSize && y <= cropY + height + handleSize) {
+      setResizeHandle('se');
+    } else if (x >= cropX && x <= cropX + width && y >= cropY && y <= cropY + height) {
+      // Inside crop area - drag
+      setIsDragging(true);
+      setDragStart({ x: x - cropX, y: y - cropY });
+    }
+    
+    setIsResizing(resizeHandle !== null);
+  }, [image, cropArea, resizeHandle]);
+
+  // Handle mouse move
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!image || !containerRef.current) return;
+    
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    if (isDragging) {
       setCropArea(prev => ({
         ...prev,
-        x: Math.max(0, Math.min(newX, rect.width - prev.width)),
-        y: Math.max(0, Math.min(newY, rect.height - prev.height))
+        x: Math.max(0, Math.min(x - dragStart.x, rect.width - prev.width)),
+        y: Math.max(0, Math.min(y - dragStart.y, rect.height - prev.height))
       }));
+    } else if (isResizing && resizeHandle) {
+      setCropArea(prev => {
+        let newCrop = { ...prev };
+        
+        switch (resizeHandle) {
+          case 'nw':
+            newCrop.x = Math.max(0, x);
+            newCrop.y = Math.max(0, y);
+            newCrop.width = Math.max(50, prev.x + prev.width - x);
+            newCrop.height = Math.max(50, prev.y + prev.height - y);
+            break;
+          case 'ne':
+            newCrop.y = Math.max(0, y);
+            newCrop.width = Math.max(50, x - prev.x);
+            newCrop.height = Math.max(50, prev.y + prev.height - y);
+            break;
+          case 'sw':
+            newCrop.x = Math.max(0, x);
+            newCrop.width = Math.max(50, prev.x + prev.width - x);
+            newCrop.height = Math.max(50, y - prev.y);
+            break;
+          case 'se':
+            newCrop.width = Math.max(50, x - prev.x);
+            newCrop.height = Math.max(50, y - prev.y);
+            break;
+        }
+        
+        // Keep within container bounds
+        newCrop.x = Math.max(0, Math.min(newCrop.x, rect.width - newCrop.width));
+        newCrop.y = Math.max(0, Math.min(newCrop.y, rect.height - newCrop.height));
+        newCrop.width = Math.min(newCrop.width, rect.width - newCrop.x);
+        newCrop.height = Math.min(newCrop.height, rect.height - newCrop.y);
+        
+        return newCrop;
+      });
     }
-  };
+  }, [image, isDragging, isResizing, resizeHandle, dragStart]);
 
-  const handleMouseUp = () => {
+  // Handle mouse up
+  const handleMouseUp = useCallback(() => {
     setIsDragging(false);
-  };
+    setIsResizing(false);
+    setResizeHandle(null);
+  }, []);
 
-  // Handle zoom changes
-  const handleZoomChange = (value: number[]) => {
+  // Handle zoom change
+  const handleZoomChange = useCallback((value: number[]) => {
     setZoom(value[0]);
-  };
+  }, []);
 
-  // Handle rotation
-  const handleRotate = () => {
+  // Handle rotate
+  const handleRotate = useCallback(() => {
     setRotation(prev => (prev + 90) % 360);
-  };
+  }, []);
 
-  // Reset to original
-  const handleReset = () => {
+  // Handle reset
+  const handleReset = useCallback(() => {
     if (!image || !containerRef.current) return;
     setZoom(1);
     setRotation(0);
     const rect = containerRef.current.getBoundingClientRect();
+    const cropSize = Math.min(300, Math.min(rect.width, rect.height) * 0.8);
     setCropArea({
-      x: 0,
-      y: 0,
-      width: rect.width,
-      height: rect.height
+      x: (rect.width - cropSize) / 2,
+      y: (rect.height - cropSize) / 2,
+      width: cropSize,
+      height: cropSize
     });
-  };
+  }, [image]);
 
   // Update canvas preview
-  const updateCanvasPreview = () => {
+  const updateCanvasPreview = useCallback(() => {
     if (!image || !canvasRef.current || !containerRef.current) return;
     
     const canvas = canvasRef.current;
@@ -149,7 +233,7 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
     const cropWidth = cropArea.width * (image.width / imageDisplayWidth);
     const cropHeight = cropArea.height * (image.height / imageDisplayHeight);
 
-    // Set canvas size to 400x400 for consistent thumbnail size
+    // Set canvas size to 400x400
     canvas.width = 400;
     canvas.height = 400;
 
@@ -174,7 +258,7 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
     const sourceWidth = Math.min(cropWidth, image.width - sourceX);
     const sourceHeight = Math.min(cropHeight, image.height - sourceY);
     
-    // Calculate destination dimensions maintaining aspect ratio for 400x400 canvas
+    // Calculate destination dimensions maintaining aspect ratio
     const aspectRatio = sourceWidth / sourceHeight;
     let destWidth = 400 / zoom;
     let destHeight = 400 / zoom;
@@ -195,28 +279,24 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
     );
     
     ctx.restore();
-  };
+  }, [image, cropArea, zoom, rotation]);
 
   // Update preview when crop area, zoom, or rotation changes
   useEffect(() => {
     updateCanvasPreview();
-  }, [cropArea, zoom, rotation, image]);
+  }, [updateCanvasPreview]);
 
-  // Initialize crop area to cover the entire container when both image and container are available
+  // Initialize canvas size when component mounts
   useEffect(() => {
-    if (image && containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      setCropArea({
-        x: 0,
-        y: 0,
-        width: rect.width,
-        height: rect.height
-      });
+    if (canvasRef.current) {
+      const canvas = canvasRef.current;
+      canvas.width = 400;
+      canvas.height = 400;
     }
-  }, [image, open]);
+  }, []);
 
   // Save edited image
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!image || !canvasRef.current || !containerRef.current) return;
     
     setIsLoading(true);
@@ -253,7 +333,7 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
       const cropWidth = cropArea.width * (image.width / imageDisplayWidth);
       const cropHeight = cropArea.height * (image.height / imageDisplayHeight);
 
-      // Set canvas size to 400x400 for consistent thumbnail size
+      // Set canvas size to 400x400
       canvas.width = 400;
       canvas.height = 400;
 
@@ -278,7 +358,7 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
       const sourceWidth = Math.min(cropWidth, image.width - sourceX);
       const sourceHeight = Math.min(cropHeight, image.height - sourceY);
       
-      // Calculate destination dimensions maintaining aspect ratio for 400x400 canvas
+      // Calculate destination dimensions maintaining aspect ratio
       const aspectRatio = sourceWidth / sourceHeight;
       let destWidth = 400 / zoom;
       let destHeight = 400 / zoom;
@@ -318,7 +398,7 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [image, cropArea, zoom, rotation, onSave, toast]);
 
   if (!image) {
     return (
@@ -398,6 +478,7 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
             >
               {image && (
                 <img
+                  ref={imageRef}
                   src={imageUrl}
                   alt="Edit thumbnail"
                   className="max-w-full max-h-full object-contain"
@@ -407,7 +488,8 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
                   }}
                 />
               )}
-              {/* Crop overlay */}
+              
+              {/* Crop overlay with resize handles */}
               {image && (
                 <div
                   className="absolute border-2 border-pink-500 bg-pink-500 bg-opacity-20 cursor-move"
@@ -418,6 +500,13 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
                     height: `${cropArea.height}px`,
                   }}
                 >
+                  {/* Resize handles */}
+                  <div className="absolute -top-1 -left-1 w-2 h-2 bg-pink-500 border border-white cursor-nw-resize"></div>
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-pink-500 border border-white cursor-ne-resize"></div>
+                  <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-pink-500 border border-white cursor-sw-resize"></div>
+                  <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-pink-500 border border-white cursor-se-resize"></div>
+                  
+                  {/* Center move icon */}
                   <div className="absolute inset-0 flex items-center justify-center">
                     <Move className="h-6 w-6 text-pink-500" />
                   </div>
@@ -429,19 +518,20 @@ export function ThumbnailEditor({ imageUrl, open, onOpenChange, onSave }: Thumbn
           {/* Preview */}
           <div className="flex items-center gap-4">
             <span className="text-sm font-medium">Preview (400x400):</span>
-            <div className="w-24 h-24 border border-gray-300 rounded overflow-hidden bg-gray-100">
+            <div className="w-32 h-32 border border-gray-300 rounded overflow-hidden bg-gray-100">
               <canvas
                 ref={canvasRef}
-                className="w-full h-full"
+                width={400}
+                height={400}
                 style={{ 
-                  maxWidth: '100%', 
-                  maxHeight: '100%',
-                  objectFit: 'contain'
+                  width: '100%', 
+                  height: '100%',
+                  objectFit: 'contain',
+                  display: 'block'
                 }}
               />
             </div>
           </div>
-
         </div>
 
         {/* Action Buttons - Fixed at bottom */}

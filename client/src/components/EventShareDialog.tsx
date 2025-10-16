@@ -92,8 +92,8 @@ export function EventShareDialog({ open, onOpenChange, event }: EventShareDialog
   const shareToWhatsApp = () => {
     if (!shareUrl || !event) return;
     
-    const message = `🎉 Check out photos from "${event.title}"!\n\n📅 ${new Date(event.eventDate).toLocaleDateString('en-GB')}\n📍 ${event.location}\n\n✨ View and find your photos here: ${shareUrl}`;
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    const message = `Check out photos from "${event.title}"!\n\nDate: ${new Date(event.eventDate).toLocaleDateString('en-GB')}\nLocation: ${event.location}\n\nView and find your photos here:\n${shareUrl}`;
+    const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };
 
@@ -197,20 +197,6 @@ export function EventShareDialog({ open, onOpenChange, event }: EventShareDialog
                 </div>
               </div>
               
-              <div className="bg-blue-50 p-3 rounded-lg">
-                <div className="text-sm font-medium text-blue-900 mb-1">Event Access Details:</div>
-                <div className="text-sm text-blue-700">
-                  {event?.isPrivate ? (
-                    <>
-                      <div><strong>Event Type:</strong> Private</div>
-                      <div><strong>Public PIN:</strong> {event.publicPin} (Face recognition required)</div>
-                      <div><strong>Bride-Groom PIN:</strong> {event.brideGroomPin} (Full gallery access)</div>
-                    </>
-                  ) : (
-                    <div><strong>Event Type:</strong> Public (No PIN required)</div>
-                  )}
-                </div>
-              </div>
             </div>
           )}
         </div>

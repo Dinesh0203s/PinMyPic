@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Calendar, Lock, Users, Camera, Search, MapPin, Eye, X, Upload, Scan, Download, Unlock, Video, VideoOff, ChevronLeft, ChevronRight, Share2, Copy, ExternalLink, Check, Archive } from 'lucide-react';
+import { Calendar, Lock, Users, Camera, Search, MapPin, Eye, X, Upload, Scan, Download, Unlock, Video, VideoOff, ChevronLeft, ChevronRight, Share2, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ import { useLocation, useParams, useSearchParams, useNavigate } from 'react-rout
 import JSZip from 'jszip';
 import { useDownloadManager } from '@/hooks/useDownloadManager';
 import DownloadProgressModal from '@/components/DownloadProgressModal';
+import { EventShareDialog } from '@/components/EventShareDialog';
 import SEOHead from '@/components/SEOHead';
 
 const Events = () => {
@@ -80,9 +81,6 @@ const Events = () => {
   // Share functionality
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareEvent, setShareEvent] = useState<Event | null>(null);
-  const [shareUrl, setShareUrl] = useState<string>('');
-  const [generatingUrl, setGeneratingUrl] = useState(false);
-  const [copiedUrl, setCopiedUrl] = useState(false);
   
   // Download all functionality - now handled by download manager
   
@@ -117,83 +115,10 @@ const Events = () => {
     setHasShownFirstTimeSaveToast(hasShownToast);
   }, []);
 
-  // Share URL generation function
-  const generateShareUrl = async (event: Event) => {
-    if (!currentUser) {
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in to share events.",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    setGeneratingUrl(true);
-    try {
-      const token = await currentUser.getIdToken();
-      const response = await fetch(`/api/events/${event.id}/share-url`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setShareUrl(data.shareUrl);
-        setShareEvent(event);
-        setShareDialogOpen(true);
-        toast({
-          title: "Share URL Generated",
-          description: "The shareable URL has been created successfully."
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to generate share URL. Please try again.",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error('Error generating share URL:', error);
-      toast({
-        title: "Error",
-        description: "An error occurred while generating the share URL.",
-        variant: "destructive"
-      });
-    } finally {
-      setGeneratingUrl(false);
-    }
-  };
-
-  // Copy URL to clipboard
-  const copyShareUrl = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopiedUrl(true);
-      toast({
-        title: "URL Copied",
-        description: "The share URL has been copied to your clipboard."
-      });
-      
-      // Reset copied state after 2 seconds
-      setTimeout(() => setCopiedUrl(false), 2000);
-    } catch (error) {
-      console.error('Error copying to clipboard:', error);
-      toast({
-        title: "Error",
-        description: "Failed to copy URL to clipboard.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  // Open URL in new tab
-  const openShareUrl = () => {
-    if (shareUrl) {
-      window.open(shareUrl, '_blank');
-    }
+  // Share function to open the share dialog
+  const openShareDialog = (event: Event) => {
+    setShareEvent(event);
+    setShareDialogOpen(true);
   };
 
 
@@ -1300,18 +1225,13 @@ const Events = () => {
                       </Button>
                       
                       <Button 
-                        onClick={() => generateShareUrl(event)}
+                        onClick={() => openShareDialog(event)}
                         variant="outline"
                         size="sm"
-                        disabled={generatingUrl}
                         className="px-3"
                         title="Share Event"
                       >
-                        {generatingUrl ? (
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
-                        ) : (
-                          <Share2 className="h-4 w-4" />
-                        )}
+                        <Share2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </CardContent>
@@ -1647,59 +1567,11 @@ const Events = () => {
       )}
 
       {/* Share Event Dialog */}
-      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Share2 className="h-5 w-5" />
-              Share Event: {shareEvent?.title}
-            </DialogTitle>
-            <DialogDescription>
-              Share this event with others using the URL below.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            {shareUrl && (
-              <div className="space-y-3">
-                <div className="space-y-3">
-                  <div className="flex gap-2">
-                    <Input
-                      value={shareUrl}
-                      readOnly
-                      className="flex-1"
-                      onClick={(e) => e.currentTarget.select()}
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={copyShareUrl}
-                      className="shrink-0"
-                      title="Copy URL"
-                    >
-                      {copiedUrl ? (
-                        <Check className="h-4 w-4 text-green-600" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={openShareUrl}
-                      className="shrink-0"
-                      title="Open in new tab"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  
-                </div>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <EventShareDialog
+        open={shareDialogOpen}
+        onOpenChange={setShareDialogOpen}
+        event={shareEvent}
+      />
 
       {/* Download Progress Modal */}
       <DownloadProgressModal

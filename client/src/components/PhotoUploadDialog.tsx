@@ -338,8 +338,8 @@ export function PhotoUploadDialog({
         },
         {
           quality: compressionQuality,
-          maxWidth: 1920,
-          maxHeight: 1080,
+          maxWidth: 4000, // Increased to allow higher resolution
+          maxHeight: 4000, // Increased to allow higher resolution
           format: imageCompressor.isWebPSupported() ? 'webp' : 'jpeg'
         },
         (stats: CompressionQueueStats) => {
@@ -802,7 +802,7 @@ export function PhotoUploadDialog({
                 <div className="text-xs text-blue-600 space-y-1">
                   <p>• Higher quality = larger files, slower uploads</p>
                   <p>• Lower quality = smaller files, faster uploads</p>
-                  <p>• Images will be resized to max 1920x1080 pixels</p>
+                  <p>• Images will be resized to 64% of original resolution (max 4000x4000 pixels)</p>
                 </div>
               </div>
             )}

@@ -32,8 +32,8 @@ export class ImageCompressor {
   ): Promise<CompressionResult> {
     const {
       quality = 0.8,
-      maxWidth = 1920,
-      maxHeight = 1080,
+      maxWidth = 4000, // Increased default to allow higher resolution
+      maxHeight = 4000, // Increased default to allow higher resolution
       format = 'jpeg'
     } = options;
 
@@ -143,6 +143,7 @@ export class ImageCompressor {
 
   /**
    * Calculate optimal dimensions while maintaining aspect ratio
+   * Uses 64% of original resolution (more than half) for better quality
    */
   private calculateDimensions(
     originalWidth: number, 
@@ -152,10 +153,14 @@ export class ImageCompressor {
   ): { width: number; height: number } {
     const aspectRatio = originalWidth / originalHeight;
 
-    let width = originalWidth;
-    let height = originalHeight;
+    // Calculate 64% of original dimensions (more than half)
+    const targetWidth = Math.round(originalWidth * 0.64);
+    const targetHeight = Math.round(originalHeight * 0.64);
 
-    // Scale down if image is too large
+    let width = targetWidth;
+    let height = targetHeight;
+
+    // Ensure we don't exceed the maximum limits
     if (width > maxWidth) {
       width = maxWidth;
       height = width / aspectRatio;
@@ -164,6 +169,12 @@ export class ImageCompressor {
     if (height > maxHeight) {
       height = maxHeight;
       width = height * aspectRatio;
+    }
+
+    // Don't upscale - if original is smaller than 64%, keep original size
+    if (width > originalWidth) {
+      width = originalWidth;
+      height = originalHeight;
     }
 
     return {
@@ -215,8 +226,8 @@ export class ImageCompressor {
 
     return {
       quality,
-      maxWidth: 1920,
-      maxHeight: 1080,
+      maxWidth: 4000, // Increased to allow higher resolution
+      maxHeight: 4000, // Increased to allow higher resolution
       format: isWebPSupported ? 'webp' : 'jpeg'
     };
   }

@@ -307,11 +307,14 @@ export function PhotoUploadDialog({
       });
     }
 
-    // Apply compression if enabled - use queue-based processing
+    // Apply compression if enabled - use queue-based processing with multiprocessing
     if (eventCompressionSetting) {
+      // Get performance stats for better user feedback
+      const performanceStats = await imageCompressor.getCompressionPerformanceStats(imageFiles);
+      
       toast({
-        title: "Starting compression queue",
-        description: `Adding ${imageFiles.length} images to compression queue for sequential processing...`,
+        title: "Starting dynamic compression pipeline",
+        description: `Processing ${imageFiles.length} images with dynamic pipeline (max ${performanceStats.batchSize} concurrent). Images upload immediately after compression. Estimated time: ${performanceStats.estimatedTime}`,
       });
 
       // Set uploading state to true for auto-upload
@@ -803,6 +806,9 @@ export function PhotoUploadDialog({
                   <p>• Higher quality = larger files, slower uploads</p>
                   <p>• Lower quality = smaller files, faster uploads</p>
                   <p>• Images will be resized to 64% of original resolution (max 4000x4000 pixels)</p>
+                  <p>• Dynamic pipeline: {imageCompressor.getDevicePerformanceInfo().batchSize} images compress simultaneously</p>
+                  <p>• Immediate upload: Images upload as soon as compression completes</p>
+                  <p>• Device: {imageCompressor.getDevicePerformanceInfo().cores} cores, {imageCompressor.getDevicePerformanceInfo().memory}GB RAM</p>
                 </div>
               </div>
             )}

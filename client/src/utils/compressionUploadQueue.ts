@@ -36,6 +36,8 @@ export class CompressionUploadQueue {
   private onItemUpdate?: (item: CompressionQueueItem) => void;
   private uploadFunction: (file: File) => Promise<void>;
   private compressionOptions: any;
+  private activeCompressionTasks: Set<string> = new Set();
+  private maxConcurrentCompressions: number;
 
   constructor(
     uploadFunction: (file: File) => Promise<void>,
@@ -47,6 +49,7 @@ export class CompressionUploadQueue {
     this.compressionOptions = compressionOptions;
     this.onProgress = onProgress;
     this.onItemUpdate = onItemUpdate;
+    this.maxConcurrentCompressions = this.getOptimalBatchSize();
   }
 
   /**
@@ -66,7 +69,7 @@ export class CompressionUploadQueue {
   }
 
   /**
-   * Start processing the queue
+   * Start processing the queue with dynamic pipeline processing
    */
   async startProcessing(): Promise<void> {
     if (this.isProcessing) {
@@ -76,19 +79,110 @@ export class CompressionUploadQueue {
     this.isProcessing = true;
 
     try {
-      while (this.queue.length > 0) {
-        const nextItem = this.queue.find(item => item.status === 'pending');
-        if (!nextItem) {
-          break;
-        }
-
-        this.currentItem = nextItem;
-        await this.processItem(nextItem);
-      }
+      // Start the dynamic pipeline
+      await this.runDynamicPipeline();
     } finally {
       this.isProcessing = false;
       this.currentItem = null;
       this.updateStats();
+    }
+  }
+
+  /**
+   * Run dynamic pipeline - continuously process items as they become available
+   */
+  private async runDynamicPipeline(): Promise<void> {
+    const activePromises = new Map<string, Promise<void>>();
+    
+    while (this.hasPendingItems() || activePromises.size > 0) {
+      // Start new compressions if we have capacity and pending items
+      while (activePromises.size < this.maxConcurrentCompressions && this.hasPendingItems()) {
+        const nextItem = this.getNextPendingItem();
+        if (nextItem) {
+          const promise = this.processItemWithDynamicPipeline(nextItem);
+          activePromises.set(nextItem.id, promise);
+          
+          // Remove promise when it completes
+          promise.finally(() => {
+            activePromises.delete(nextItem.id);
+          });
+        }
+      }
+      
+      // Wait for at least one compression to complete
+      if (activePromises.size > 0) {
+        await Promise.race(activePromises.values());
+      }
+      
+      // Small delay to prevent busy waiting
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+  }
+
+  /**
+   * Process item with dynamic pipeline - compression and immediate upload
+   */
+  private async processItemWithDynamicPipeline(item: CompressionQueueItem): Promise<void> {
+    try {
+      // Add to active compression tasks
+      this.activeCompressionTasks.add(item.id);
+      
+      // Step 1: Compress the image
+      await this.compressItem(item);
+      
+      // Remove from active compression tasks
+      this.activeCompressionTasks.delete(item.id);
+      
+      // Step 2: Immediately upload the compressed image (don't wait for batch)
+      await this.uploadItem(item);
+      
+    } catch (error) {
+      this.activeCompressionTasks.delete(item.id);
+      item.status = 'error';
+      item.error = error instanceof Error ? error.message : 'Unknown error';
+      this.onItemUpdate?.(item);
+    }
+  }
+
+  /**
+   * Check if there are pending items
+   */
+  private hasPendingItems(): boolean {
+    return this.queue.some(item => item.status === 'pending');
+  }
+
+  /**
+   * Check if there are active compressions
+   */
+  private hasActiveCompressions(): boolean {
+    return this.activeCompressionTasks.size > 0;
+  }
+
+  /**
+   * Get next pending item
+   */
+  private getNextPendingItem(): CompressionQueueItem | null {
+    return this.queue.find(item => item.status === 'pending') || null;
+  }
+
+
+  /**
+   * Get optimal batch size based on device capabilities
+   */
+  private getOptimalBatchSize(): number {
+    // Check available memory and CPU cores
+    const memory = (navigator as any).deviceMemory || 4; // Default to 4GB
+    const cores = navigator.hardwareConcurrency || 4; // Default to 4 cores
+    
+    // Adjust batch size based on device capabilities
+    if (memory >= 8 && cores >= 8) {
+      return 4; // High-end devices - process 4 images simultaneously
+    } else if (memory >= 4 && cores >= 4) {
+      return 3; // Mid-range devices - process 3 images simultaneously
+    } else if (memory >= 2 && cores >= 2) {
+      return 2; // Lower-end devices - process 2 images simultaneously
+    } else {
+      return 1; // Very low-end devices - process 1 image at a time
     }
   }
 
@@ -195,6 +289,21 @@ export class CompressionUploadQueue {
     };
 
     return stats;
+  }
+
+  /**
+   * Get dynamic pipeline information
+   */
+  getPipelineInfo(): {
+    maxConcurrentCompressions: number;
+    activeCompressions: number;
+    isProcessing: boolean;
+  } {
+    return {
+      maxConcurrentCompressions: this.maxConcurrentCompressions,
+      activeCompressions: this.activeCompressionTasks.size,
+      isProcessing: this.isProcessing
+    };
   }
 
   /**

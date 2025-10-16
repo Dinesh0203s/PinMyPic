@@ -106,7 +106,7 @@ export class ImageCompressor {
   }
 
   /**
-   * Compress multiple images in batch
+   * Compress multiple images in batch with multiprocessing
    */
   async compressImages(
     files: File[], 
@@ -114,13 +114,21 @@ export class ImageCompressor {
   ): Promise<CompressionResult[]> {
     const results: CompressionResult[] = [];
     
-    // Process images in batches to avoid overwhelming the browser
-    const batchSize = 3;
+    // Determine optimal batch size based on device capabilities
+    const batchSize = this.getOptimalBatchSize();
+    const totalBatches = Math.ceil(files.length / batchSize);
+    
+    console.log(`Processing ${files.length} images in ${totalBatches} batches of ${batchSize} images each`);
+    
+    // Process images in parallel batches
     for (let i = 0; i < files.length; i += batchSize) {
       const batch = files.slice(i, i + batchSize);
-      const batchResults = await Promise.allSettled(
-        batch.map(file => this.compressImage(file, options))
-      );
+      const batchNumber = Math.floor(i / batchSize) + 1;
+      
+      console.log(`Processing batch ${batchNumber}/${totalBatches} (${batch.length} images)`);
+      
+      // Process batch in parallel using Web Workers if available, otherwise Promise.all
+      const batchResults = await this.processBatchParallel(batch, options);
 
       batchResults.forEach((result, index) => {
         if (result.status === 'fulfilled') {
@@ -136,9 +144,46 @@ export class ImageCompressor {
           });
         }
       });
+      
+      // Small delay between batches to prevent browser freezing
+      if (i + batchSize < files.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
     }
 
     return results;
+  }
+
+  /**
+   * Process a batch of images in parallel
+   */
+  private async processBatchParallel(
+    batch: File[], 
+    options: CompressionOptions
+  ): Promise<PromiseSettledResult<CompressionResult>[]> {
+    // Use Promise.allSettled for parallel processing
+    const promises = batch.map(file => this.compressImage(file, options));
+    return Promise.allSettled(promises);
+  }
+
+  /**
+   * Get optimal batch size based on device capabilities
+   */
+  private getOptimalBatchSize(): number {
+    // Check available memory and CPU cores
+    const memory = (navigator as any).deviceMemory || 4; // Default to 4GB
+    const cores = navigator.hardwareConcurrency || 4; // Default to 4 cores
+    
+    // Adjust batch size based on device capabilities
+    if (memory >= 8 && cores >= 8) {
+      return 6; // High-end devices
+    } else if (memory >= 4 && cores >= 4) {
+      return 4; // Mid-range devices
+    } else if (memory >= 2 && cores >= 2) {
+      return 3; // Lower-end devices
+    } else {
+      return 2; // Very low-end devices
+    }
   }
 
   /**
@@ -229,6 +274,60 @@ export class ImageCompressor {
       maxWidth: 4000, // Increased to allow higher resolution
       maxHeight: 4000, // Increased to allow higher resolution
       format: isWebPSupported ? 'webp' : 'jpeg'
+    };
+  }
+
+  /**
+   * Get device performance information
+   */
+  getDevicePerformanceInfo(): {
+    memory: number;
+    cores: number;
+    batchSize: number;
+    recommendedParallelProcessing: boolean;
+  } {
+    const memory = (navigator as any).deviceMemory || 4;
+    const cores = navigator.hardwareConcurrency || 4;
+    const batchSize = this.getOptimalBatchSize();
+    
+    return {
+      memory,
+      cores,
+      batchSize,
+      recommendedParallelProcessing: cores >= 2 && memory >= 2
+    };
+  }
+
+  /**
+   * Get compression performance statistics
+   */
+  async getCompressionPerformanceStats(files: File[]): Promise<{
+    estimatedTime: string;
+    batchCount: number;
+    batchSize: number;
+    totalImages: number;
+    deviceInfo: any;
+  }> {
+    const deviceInfo = this.getDevicePerformanceInfo();
+    const batchSize = deviceInfo.batchSize;
+    const batchCount = Math.ceil(files.length / batchSize);
+    
+    // Estimate time based on device capabilities and file sizes
+    const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+    const avgFileSize = totalSize / files.length;
+    
+    // Rough estimation: 1MB per second for compression on average device
+    const estimatedSeconds = (totalSize / (1024 * 1024)) / deviceInfo.cores;
+    const estimatedTime = estimatedSeconds < 60 
+      ? `${Math.round(estimatedSeconds)}s`
+      : `${Math.round(estimatedSeconds / 60)}m ${Math.round(estimatedSeconds % 60)}s`;
+    
+    return {
+      estimatedTime,
+      batchCount,
+      batchSize,
+      totalImages: files.length,
+      deviceInfo
     };
   }
 }

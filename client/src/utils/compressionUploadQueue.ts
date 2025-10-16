@@ -43,13 +43,16 @@ export class CompressionUploadQueue {
     uploadFunction: (file: File) => Promise<void>,
     compressionOptions: any = {},
     onProgress?: (stats: CompressionQueueStats) => void,
-    onItemUpdate?: (item: CompressionQueueItem) => void
+    onItemUpdate?: (item: CompressionQueueItem) => void,
+    customBatchSize?: number
   ) {
     this.uploadFunction = uploadFunction;
     this.compressionOptions = compressionOptions;
     this.onProgress = onProgress;
     this.onItemUpdate = onItemUpdate;
-    this.maxConcurrentCompressions = this.getOptimalBatchSize();
+    this.maxConcurrentCompressions = customBatchSize && customBatchSize > 0 
+      ? Math.min(customBatchSize, 10) // Cap at 10 for safety
+      : this.getOptimalBatchSize();
   }
 
   /**
@@ -304,6 +307,13 @@ export class CompressionUploadQueue {
       activeCompressions: this.activeCompressionTasks.size,
       isProcessing: this.isProcessing
     };
+  }
+
+  /**
+   * Get current batch size
+   */
+  getBatchSize(): number {
+    return this.maxConcurrentCompressions;
   }
 
   /**

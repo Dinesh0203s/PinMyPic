@@ -50,6 +50,7 @@ export function PhotoUploadDialog({
   const [dynamicStats, setDynamicStats] = useState<DynamicUploadStats | null>(null);
   const [compressionQuality, setCompressionQuality] = useState<number>(1.0);
   const [showCompressionSettings, setShowCompressionSettings] = useState(false);
+  const [customBatchSize, setCustomBatchSize] = useState<number>(0); // 0 means use automatic
   
   // Compression queue state
   const [compressionQueue, setCompressionQueue] = useState<CompressionUploadQueue | null>(null);
@@ -58,6 +59,14 @@ export function PhotoUploadDialog({
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Get effective batch size (custom or automatic)
+  const getEffectiveBatchSize = () => {
+    if (customBatchSize > 0) {
+      return Math.min(customBatchSize, 10); // Cap at 10 for safety
+    }
+    return imageCompressor.getDevicePerformanceInfo().batchSize;
+  };
 
 
   // Use controlled props if provided, otherwise use internal state
@@ -312,9 +321,10 @@ export function PhotoUploadDialog({
       // Get performance stats for better user feedback
       const performanceStats = await imageCompressor.getCompressionPerformanceStats(imageFiles);
       
+      const effectiveBatchSize = getEffectiveBatchSize();
       toast({
         title: "Starting dynamic compression pipeline",
-        description: `Processing ${imageFiles.length} images with dynamic pipeline (max ${performanceStats.batchSize} concurrent). Images upload immediately after compression. Estimated time: ${performanceStats.estimatedTime}`,
+        description: `Processing ${imageFiles.length} images with dynamic pipeline (max ${effectiveBatchSize} concurrent). Images upload immediately after compression. Estimated time: ${performanceStats.estimatedTime}`,
       });
 
       // Set uploading state to true for auto-upload
@@ -325,7 +335,7 @@ export function PhotoUploadDialog({
         await requestWakeLock();
       }
 
-      // Create compression queue
+      // Create compression queue with custom batch size
       const queue = new CompressionUploadQueue(
         async (file: File) => {
           // Upload function for the queue
@@ -359,7 +369,8 @@ export function PhotoUploadDialog({
               return [...prev, item];
             }
           });
-        }
+        },
+        getEffectiveBatchSize() // Pass custom batch size
       );
 
       setCompressionQueue(queue);
@@ -802,11 +813,36 @@ export function PhotoUploadDialog({
                   </div>
                 </div>
                 
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm text-blue-700">
+                      Batch Size: {customBatchSize === 0 ? 'Auto' : customBatchSize} images
+                    </Label>
+                    <span className="text-xs text-blue-600">
+                      {customBatchSize === 0 ? `Auto (${imageCompressor.getDevicePerformanceInfo().batchSize})` : 
+                       customBatchSize <= 2 ? 'Conservative' :
+                       customBatchSize <= 4 ? 'Balanced' : 'Aggressive'}
+                    </span>
+                  </div>
+                  <Slider
+                    value={[customBatchSize]}
+                    onValueChange={(value) => setCustomBatchSize(value[0])}
+                    min={0}
+                    max={10}
+                    step={1}
+                    className="w-full"
+                  />
+                  <div className="flex justify-between text-xs text-blue-500">
+                    <span>Auto (Device-based)</span>
+                    <span>10 (Maximum)</span>
+                  </div>
+                </div>
+                
                 <div className="text-xs text-blue-600 space-y-1">
                   <p>• Higher quality = larger files, slower uploads</p>
                   <p>• Lower quality = smaller files, faster uploads</p>
                   <p>• Images will be resized to 64% of original resolution (max 4000x4000 pixels)</p>
-                  <p>• Dynamic pipeline: {imageCompressor.getDevicePerformanceInfo().batchSize} images compress simultaneously</p>
+                  <p>• Dynamic pipeline: {getEffectiveBatchSize()} images compress simultaneously</p>
                   <p>• Immediate upload: Images upload as soon as compression completes</p>
                   <p>• Device: {imageCompressor.getDevicePerformanceInfo().cores} cores, {imageCompressor.getDevicePerformanceInfo().memory}GB RAM</p>
                 </div>

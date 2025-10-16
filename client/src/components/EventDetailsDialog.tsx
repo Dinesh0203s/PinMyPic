@@ -285,10 +285,26 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
           description: result.message || `${photoIds.length} photos deleted successfully`
         });
         
-        // Remove deleted photos from local state
-        setPhotos(photos.filter(p => !photoIds.includes(p.id)));
+        // Clear any selected photos in the gallery first
+        if (typeof window !== 'undefined' && window.dispatchEvent) {
+          window.dispatchEvent(new CustomEvent('clearPhotoSelection'));
+        }
+        
+        // Remove deleted photos from local state using functional update
+        setPhotos(prevPhotos => {
+          const filtered = prevPhotos.filter(p => !photoIds.includes(p.id));
+          console.log(`Removed ${photoIds.length} photos, ${filtered.length} remaining`);
+          return filtered;
+        });
+        
         // Refresh event data to update photo count
         onEventUpdated();
+        
+        // Force reload photos to ensure UI is completely in sync
+        setTimeout(() => {
+          console.log('Reloading photos after bulk delete...');
+          loadPhotos();
+        }, 200);
       } else {
         const errorData = await response.json();
         console.error('Bulk delete failed:', errorData);
@@ -942,6 +958,7 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
             </div>
 
             <AdminPhotoGallery
+              key={`gallery-${photos.length}-${event?.id}`}
               photos={photos}
               loading={loadingPhotos}
               onPhotoClick={setFullScreenImage}

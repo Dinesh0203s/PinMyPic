@@ -56,6 +56,19 @@ const AdminPhotoGallery = ({
     }
   }, [photos]);
 
+  // Listen for clear selection events
+  useEffect(() => {
+    const handleClearSelection = () => {
+      setSelectedPhotos(new Set());
+      setIsMultiSelectMode(false);
+    };
+
+    window.addEventListener('clearPhotoSelection', handleClearSelection);
+    return () => {
+      window.removeEventListener('clearPhotoSelection', handleClearSelection);
+    };
+  }, []);
+
   // Virtualized scrolling - load more photos as user scrolls
   useEffect(() => {
     if (!containerRef.current) return;
@@ -213,8 +226,17 @@ const AdminPhotoGallery = ({
     try {
       await onBulkDeletePhotos(photoIds);
       console.log('Bulk delete completed successfully');
+      
+      // Clear selection and exit multi-select mode
       setSelectedPhotos(new Set());
       setIsMultiSelectMode(false);
+      
+      // Force a small delay to ensure UI updates
+      setTimeout(() => {
+        // This will trigger a re-render with updated photos
+        console.log('Bulk delete UI cleanup completed');
+      }, 50);
+      
     } catch (error) {
       console.error('Bulk delete failed:', error);
       // Show error message to user

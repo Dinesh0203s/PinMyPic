@@ -12,8 +12,8 @@ const Brand = () => {
     "@context": "https://schema.org",
     "@type": "Brand",
     "name": "PinMyPic",
-    "alternateName": ["Pin My Pic", "PinMPic", "pinmpic", "pinmypic"],
-    "description": "PinMyPic (PinMPic) - Professional photography services with AI-powered face recognition technology",
+    "alternateName": ["Pin My Pic", "pinmypic"],
+    "description": "PinMyPic - Professional photography services with AI-powered face recognition technology",
     "url": "https://pinmypic.online",
     "logo": "https://pinmypic.online/logo.png",
     "slogan": "Capture Every Moment",
@@ -39,8 +39,8 @@ const Brand = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <SEOHead 
-        title="PinMyPic (PinMPic) - Brand Information | AI Photography Services"
-        description="PinMyPic (PinMPic) - Professional photography brand with AI-powered face recognition technology. Learn about our photography services in Coimbatore, Tamil Nadu."
+        title="PinMyPic - Brand Information | AI Photography Services"
+        description="PinMyPic - Professional photography brand with AI-powered face recognition technology. Learn about our photography services in Coimbatore, Tamil Nadu."
         keywords="pinmpic, pinmypic, brand, photography brand, AI photography, face recognition, Coimbatore photography, Tamil Nadu"
         structuredData={brandStructuredData}
       />
@@ -57,7 +57,7 @@ const Brand = () => {
                 </span>
                 <br />
                 <span className="text-3xl md:text-4xl text-gray-600">
-                  (PinMPic)
+                  PinMyPic
                 </span>
               </h1>
               <p className="text-xl text-gray-600 mb-8">
@@ -70,7 +70,7 @@ const Brand = () => {
               <div>
                 <h2 className="text-3xl font-bold mb-6 text-gray-800">About PinMyPic</h2>
                 <p className="text-lg text-gray-600 mb-6">
-                  PinMyPic (also known as PinMPic) is a professional photography brand specializing in 
+                  PinMyPic is a professional photography brand specializing in 
                   AI-powered face recognition technology. We capture life's most precious moments with 
                   artistic vision and professional expertise.
                 </p>

@@ -12,7 +12,7 @@ interface SEOHeadProps {
 }
 
 const SEOHead = ({
-  title = "PinMyPic (PinMPic) - AI-Powered Photography & Face Recognition | Professional Event Photography",
+  title = "PinMyPic - AI-Powered Photography & Face Recognition | Professional Event Photography",
   description = "Professional photography services with AI-powered face recognition technology. Find yourself in event photos instantly. Wedding, corporate, and party photography in Coimbatore, Tamil Nadu.",
   keywords = "pinmpic, pinmypic, photography, face recognition, AI photography, event photography, wedding photography, corporate events, photo gallery, Coimbatore photography, Tamil Nadu, professional photographer, photo booking, instant photo finder",
   image = "https://pinmypic.online/logo.png",

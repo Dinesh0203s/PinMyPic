@@ -24,6 +24,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getOriginalImageUrl, getOriginalImageUrlFromFileId } from '@/utils/imagePreloader';
 
 interface PremiumThumbnailEditorProps {
   imageUrl: string;
@@ -104,11 +105,13 @@ export function PremiumThumbnailEditor({ imageUrl, open, onOpenChange, onSave }:
       img.onerror = () => {
         toast({
           title: "Error",
-          description: "Failed to load image",
+          description: "Failed to load original image",
           variant: "destructive"
         });
       };
-      img.src = imageUrl;
+      // Use original full-quality image for editing - force clean URL
+      const originalImageUrl = getOriginalImageUrlFromFileId(imageUrl);
+      img.src = originalImageUrl;
     }
   }, [imageUrl, open, toast]);
 
@@ -343,6 +346,7 @@ export function PremiumThumbnailEditor({ imageUrl, open, onOpenChange, onSave }:
     const cropY = (cropArea.y - imageOffsetY) * (image.height / imageDisplayHeight);
     const cropWidth = cropArea.width * (image.width / imageDisplayWidth);
     const cropHeight = cropArea.height * (image.height / imageDisplayHeight);
+    
 
     // Set canvas size to 400x400
     canvas.width = 400;
@@ -489,12 +493,12 @@ export function PremiumThumbnailEditor({ imageUrl, open, onOpenChange, onSave }:
       ctx.restore();
 
       // Convert to data URL with maximum quality (PNG for lossless)
-      const dataUrl = canvas.toDataURL('image/png');
+      const dataUrl = canvas.toDataURL('image/png', 1.0); // Maximum quality
       onSave(dataUrl);
       
       toast({
         title: "Success",
-        description: "Premium thumbnail created successfully",
+        description: "Premium thumbnail saved in full quality",
       });
     } catch (error) {
       console.error('Error saving edited image:', error);
@@ -521,7 +525,8 @@ export function PremiumThumbnailEditor({ imageUrl, open, onOpenChange, onSave }:
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500 mx-auto mb-4"></div>
-              <p>Loading image...</p>
+              <p>Loading original full-quality image...</p>
+              <p className="text-sm text-gray-500 mt-2">This may take a moment for high-resolution images</p>
             </div>
           </div>
         </DialogContent>
@@ -537,6 +542,7 @@ export function PremiumThumbnailEditor({ imageUrl, open, onOpenChange, onSave }:
             <Crop className="h-5 w-5" />
             Premium Thumbnail Editor
             <Badge variant="secondary" className="ml-2">400x400</Badge>
+            <Badge variant="outline" className="ml-1">Original Quality</Badge>
           </DialogTitle>
         </DialogHeader>
         
@@ -684,7 +690,7 @@ export function PremiumThumbnailEditor({ imageUrl, open, onOpenChange, onSave }:
               {image && (
                 <img
                   ref={imageRef}
-                  src={imageUrl}
+                  src={getOriginalImageUrlFromFileId(imageUrl)}
                   alt="Edit thumbnail"
                   className="max-w-full max-h-full object-contain"
                   style={{

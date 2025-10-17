@@ -344,3 +344,46 @@ export const getDownloadImageUrl = (originalUrl: string) => {
   });
 };
 
+// Generate original full-quality image URL for editing (no compression, no resizing)
+export const getOriginalImageUrl = (originalUrl: string) => {
+  // For GridFS images, get original without any processing
+  if (originalUrl.startsWith('/api/images/')) {
+    const url = new URL(originalUrl, window.location.origin);
+    
+    // Remove ALL processing parameters to get original
+    const paramsToRemove = [
+      'width', 'height', 'quality', 'format', 'fit', 'position', 
+      'sharpen', 'progressive', 'thumbnail', 'download', 'w', 'h', 
+      'q', 'f', 'crop', 'resize', 'scale', 'rotate', 'flip'
+    ];
+    
+    paramsToRemove.forEach(param => {
+      url.searchParams.delete(param);
+    });
+    
+    return url.toString();
+  }
+  
+  return originalUrl; // Return as-is for external URLs
+};
+
+// Get the original image URL from a photo object
+export const getPhotoOriginalUrl = (photo: { url: string; thumbnailUrl?: string }) => {
+  // Always use the main url field, which should be the original image
+  return photo.url;
+};
+
+// Force get original image URL by extracting just the file ID and rebuilding the URL
+export const getOriginalImageUrlFromFileId = (imageUrl: string) => {
+  if (imageUrl.startsWith('/api/images/')) {
+    // Extract just the file ID from the URL
+    const urlParts = imageUrl.split('/');
+    const fileId = urlParts[urlParts.length - 1].split('?')[0]; // Remove query parameters
+    
+    // Build clean URL with just the file ID
+    return `/api/images/${fileId}`;
+  }
+  
+  return imageUrl;
+};
+

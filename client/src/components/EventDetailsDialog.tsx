@@ -322,38 +322,9 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
     }
   };
 
-  const handleSetAsThumbnail = async (photoUrl: string) => {
-    if (!event) return;
-    
-    setUploadingThumbnail(true);
-    try {
-      const response = await fetch(`/api/events/${event.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ thumbnailUrl: photoUrl })
-      });
-
-      if (response.ok) {
-        toast({
-          title: "Success",
-          description: "Event thumbnail updated successfully"
-        });
-        onEventUpdated();
-      } else {
-        throw new Error('Failed to update thumbnail');
-      }
-    } catch (error) {
-      console.error('Error updating thumbnail:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update thumbnail",
-        variant: "destructive"
-      });
-    } finally {
-      setUploadingThumbnail(false);
-    }
+  const handleSetAsThumbnail = (photoUrl: string) => {
+    // Instead of saving immediately, open the thumbnail editor
+    handleEditThumbnail(photoUrl);
   };
 
   const handleSave = async () => {
@@ -468,6 +439,7 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
       });
       return;
     }
+    // Use the original image URL for editing (not the WebP thumbnail)
     setThumbnailEditImage(photoUrl);
     setShowThumbnailEditor(true);
   };
@@ -477,28 +449,33 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
     
     setUploadingThumbnail(true);
     try {
-      // Convert data URL to blob
+      // Convert data URL to blob (PNG format for maximum quality)
       const response = await fetch(editedImageDataUrl);
       const blob = await response.blob();
       
-      // Create FormData for upload
+      // Create FormData for direct thumbnail upload
       const formData = new FormData();
-      formData.append('photos', blob, 'edited-thumbnail.jpg');
+      formData.append('thumbnail', blob, 'edited-thumbnail.png'); // Use PNG for quality
       formData.append('eventId', event.id);
+      formData.append('quality', '100'); // Maximum quality
+      formData.append('format', 'png'); // Lossless format
       
-      // Upload the edited thumbnail
-      const uploadResponse = await fetch('/api/photos/upload', {
+      // Get authentication token
+      const token = await currentUser?.getIdToken();
+      
+      // Upload the edited thumbnail directly as thumbnail (not as a photo)
+      const uploadResponse = await fetch('/api/events/thumbnail', {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
         body: formData,
       });
       
       if (uploadResponse.ok) {
         const result = await uploadResponse.json();
         
-        // Get authentication token
-        const token = await currentUser?.getIdToken();
-        
-        // Update event with new thumbnail
+        // Update event with new thumbnail URL (reuse the same token)
         const updateResponse = await fetch(`/api/events/${event.id}`, {
           method: 'PUT',
           headers: {
@@ -506,14 +483,14 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
             'Authorization': `Bearer ${token}`,
           },
           body: JSON.stringify({
-            thumbnailUrl: result.photo.url
+            thumbnailUrl: result.thumbnailUrl
           }),
         });
         
         if (updateResponse.ok) {
           toast({
             title: "Success",
-            description: "Thumbnail updated successfully",
+            description: "Thumbnail saved in original quality",
           });
           onEventUpdated();
           setShowThumbnailEditor(false);
@@ -999,7 +976,20 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEventUpdated, 
                         This is the current thumbnail for this event. Click "Edit Thumbnail" to modify it.
                       </p>
                       <Button
-                        onClick={() => handleEditThumbnail(event.thumbnailUrl!)}
+                        onClick={() => {
+                          // Find the original photo that corresponds to this thumbnail
+                          const originalPhoto = photos.find(photo => 
+                            photo.url === event.thumbnailUrl || 
+                            photo.thumbnailUrl === event.thumbnailUrl
+                          );
+                          
+                          if (originalPhoto) {
+                            handleEditThumbnail(originalPhoto.url);
+                          } else {
+                            // Fallback to thumbnail URL if original photo not found
+                            handleEditThumbnail(event.thumbnailUrl!);
+                          }
+                        }}
                         className="flex items-center gap-2"
                         disabled={uploadingThumbnail}
                       >

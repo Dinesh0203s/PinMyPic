@@ -686,6 +686,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Upload thumbnail directly for event
+  app.post("/api/events/thumbnail", authenticateUser, requirePermission('events'), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { eventId, quality = '100', format = 'png' } = req.body;
+      
+      if (!eventId) {
+        return res.status(400).json({ error: "Event ID is required" });
+      }
+
+      // Check if event exists
+      const event = await storage.getEvent(eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      // Handle file upload
+      if (!req.file) {
+        return res.status(400).json({ error: "No thumbnail file provided" });
+      }
+
+      const file = req.file;
+      const originalFilename = file.originalname;
+      const buffer = file.buffer;
+
+      // Generate thumbnail with specified quality and format
+      const sharp = await import('sharp');
+      let processedBuffer = buffer;
+
+      // Process the image with the specified quality and format
+      if (format === 'png') {
+        processedBuffer = await sharp.default(buffer)
+          .png({ quality: parseInt(quality) })
+          .toBuffer();
+      } else if (format === 'webp') {
+        processedBuffer = await sharp.default(buffer)
+          .webp({ quality: parseInt(quality) })
+          .toBuffer();
+      } else {
+        processedBuffer = await sharp.default(buffer)
+          .jpeg({ quality: parseInt(quality) })
+          .toBuffer();
+      }
+
+      // Upload to GridFS
+      const { mongoStorage } = await import('./mongo-storage');
+      const thumbnailId = await mongoStorage.uploadThumbnailToGridFS(
+        processedBuffer,
+        originalFilename,
+        eventId
+      );
+
+      // Generate the thumbnail URL
+      const thumbnailUrl = `/api/images/${thumbnailId}`;
+
+      res.json({
+        success: true,
+        thumbnailUrl,
+        thumbnailId
+      });
+
+    } catch (error) {
+      console.error("Error uploading thumbnail:", error);
+      res.status(500).json({ error: "Failed to upload thumbnail" });
+    }
+  });
+
   app.delete("/api/events/:id", authenticateUser, requirePermission('events'), async (req: AuthenticatedRequest, res) => {
     try {
       const success = await storage.deleteEvent(req.params.id);

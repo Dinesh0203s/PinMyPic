@@ -333,6 +333,26 @@ app.post('/api/photos/upload', (req, res, next) => {
   });
 });
 
+// Add multer middleware for thumbnail upload endpoint
+app.post('/api/events/thumbnail', (req, res, next) => {
+  upload.single('thumbnail')(req, res, (err) => {
+    if (err) {
+      console.error('Multer thumbnail upload error:', err);
+      
+      if (err.code === 'LIMIT_FILE_TYPE') {
+        return res.status(400).json({ error: 'Only image files are allowed' });
+      }
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'File too large. Max size is 100MB per file' });
+      }
+      
+      // Generic error
+      return res.status(400).json({ error: err.message || 'Thumbnail upload error' });
+    }
+    next();
+  });
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;

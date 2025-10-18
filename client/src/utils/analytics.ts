@@ -50,7 +50,7 @@ export const trackEvent = (action: string, category: string, label?: string, val
   });
 };
 
-// Track photography-specific events
+// Track photography-specific event
 export const trackPhotographyEvents = {
   photoSearch: (eventId: string) => {
     trackEvent('photo_search', 'photography', eventId);

@@ -124,7 +124,7 @@ For Windows 11 users with GPU acceleration:
 
 **Firebase Connection Issues**:
 - Verify your `.env` file has correct Firebase credentials
-- Check Firebase project settings
+- Check Firebase project setting
 - Ensure Realtime Database is enabled
 
 **Face Recognition Service Issues**:

@@ -3,7 +3,7 @@
 A modern photography portfolio and booking platform with AI-powered face recognition features.
 
 ## Prerequisites
-
+Live Link - pinmypic.online
 Before you begin, ensure you have the following installed:
 
 1. **Node.js** (v20 or higher)
